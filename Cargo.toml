@@ -62,7 +62,8 @@ org-wiki-lib = { path = "crates/lib" }
 git2 = "0.20"
 
 # Org-mode parsing — metadata extraction (titles, tags, etc.)
-orgize = "0.10"
+# 0.10 is in alpha; no stable release yet.
+orgize = "0.10.0-alpha.10"
 
 # HTML templating (Jinja2-like)
 tera = "1"
