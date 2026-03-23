@@ -1,0 +1,113 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/lib",
+    "crates/web",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Logan Barnett <logustus@gmail.com>"]
+license = "MIT OR Apache-2.0"
+repository = "ssh://git@gitea.proton:2222/logan/org-wiki.git"
+
+[workspace.dependencies]
+# Logging and tracing
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json", "fmt"] }
+tracing-journald = "0.3"
+
+# Systemd integration
+sd-notify = "0.4"
+
+# Utilities
+# tap - Enables method chaining and reduces superfluous local variables
+# that only exist to name intermediate results. Prefer .tap() over temporary
+# variables when it improves readability.
+tap = "1.0"
+
+# CLI parsing
+clap = { version = "4.5", features = ["derive", "env"] }
+
+# Configuration
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8"
+
+# Error handling
+thiserror = "2.0"
+
+# Web framework
+axum = "0.8"
+tokio = { version = "1.41", features = ["full"] }
+tokio-listener = { version = "0.5", features = ["axum08"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["trace", "cors", "fs", "set-header"] }
+
+# Testing
+tempfile = "3"
+
+# OpenMetrics/Prometheus
+prometheus = "0.13"
+
+# OpenAPI
+aide = { version = "0.15", features = ["axum", "axum-json", "axum-query", "scalar", "macros"] }
+schemars = "0.9"
+
+# Shared library
+org-wiki-lib = { path = "crates/lib" }
+
+# Git operations (libgit2 bindings)
+git2 = "0.20"
+
+# Org-mode parsing — metadata extraction (titles, tags, etc.)
+orgize = "0.10"
+
+# HTML templating (Jinja2-like)
+tera = "1"
+
+# OIDC / OAuth2 authentication
+openidconnect = "3"
+
+# HTTP client — OIDC token exchange, discovery
+reqwest = { version = "0.12", features = ["json"] }
+
+# Session management
+tower-sessions = "0.14"
+
+# Cryptographically-random UUIDs for session IDs
+uuid = { version = "1", features = ["v4"] }
+
+# Date/time — commit timestamps, session expiry
+time = { version = "0.3", features = ["serde"] }
+
+# URL type — OIDC issuer, redirect URIs
+url = "2"
+
+# ============================================================================
+# BUILD PROFILES
+# ============================================================================
+# Without these settings, target/debug can easily reach 20-40 GB on
+# non-trivial projects.  Dependencies are the primary culprit.
+#
+# See https://doc.rust-lang.org/cargo/reference/profiles.html
+
+[profile.dev]
+# No debug symbols.  The debugger is rarely used and debug symbols are
+# the single largest contributor to target/ bloat.
+debug = false
+# Disable incremental compilation.  Incremental writes many small files
+# to target/debug/incremental/ that accumulate quickly; the compile-time
+# benefit rarely outweighs the disk cost for typical workflows.
+incremental = false
+
+[profile.dev.package."*"]
+# Optimize dependencies even in dev builds.  Libraries like tokio and
+# axum are bottlenecks when unoptimized; this makes the program run at
+# near-release speed during development with minimal extra compile time
+# on subsequent incremental builds.
+opt-level = 3
+
+[profile.release]
+debug = false

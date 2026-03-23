@@ -1,0 +1,25 @@
+#!/bin/sh
+# Pre-commit hook: format all staged files using treefmt.
+
+set -e
+
+# Collect staged filenames (Added, Copied, or Modified only).
+STAGED_FILES=$(git diff --staged --name-only --diff-filter=ACM || true)
+
+if [ -z "$STAGED_FILES" ]; then
+  exit 0
+fi
+
+echo "Formatting staged files..."
+
+# Run treefmt on each staged file.  Word-splitting is intentional here;
+# filenames with spaces are not expected in this repository.
+# shellcheck disable=SC2086
+treefmt $STAGED_FILES
+
+# Re-stage the files after formatting.
+for f in $STAGED_FILES; do
+  git add "$f"
+done
+
+echo "Staged files formatted and re-staged."

@@ -1,0 +1,32 @@
+:root {
+  color-scheme: light dark;
+  --color-bg: #ffffff;
+  --color-surface: #f0f0f0;
+  --color-text: #111111;
+  --color-link: #0055cc;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: #111111;
+    --color-surface: #1e1e1e;
+    --color-text: #eeeeee;
+    --color-link: #77aaff;
+  }
+}
+
+body {
+  margin: 0;
+  font-family: sans-serif;
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+a {
+  color: var(--color-link);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}

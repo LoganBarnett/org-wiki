@@ -1,0 +1,25 @@
+# Rust formatting configuration.
+# Only stable features are included here.
+edition = "2021"
+
+# Indentation.
+tab_spaces = 2
+
+# Line length.
+max_width = 80
+
+# Function formatting.
+fn_params_layout = "Tall"
+fn_call_width = 80
+
+# Use field initialization shorthand if possible.
+use_field_init_shorthand = true
+
+# Remove nested parens.
+remove_nested_parens = true
+
+# Newline at end of file.
+newline_style = "Unix"
+
+# Note: For additional formatting options, use nightly rustfmt.
+# See: https://rust-lang.github.io/rustfmt/

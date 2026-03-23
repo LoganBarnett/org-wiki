@@ -1,0 +1,22 @@
+# treefmt.toml — unified formatter configuration.
+# Run `treefmt` to format all files, or `treefmt <file>` for a single file.
+# All formatters must be present in PATH (provided by the Nix devShell).
+
+[formatter.rustfmt]
+command = "rustfmt"
+options = ["--edition", "2021"]
+includes = ["*.rs"]
+
+[formatter.alejandra]
+command = "alejandra"
+includes = ["*.nix"]
+
+[formatter.elm-format]
+command = "elm-format"
+options = ["--yes"]
+includes = ["*.elm"]
+
+[formatter.prettier]
+command = "prettier"
+options = ["--write"]
+includes = ["*.css"]

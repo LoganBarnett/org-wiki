@@ -1,0 +1,67 @@
+# Example configuration file for org-wiki
+# Copy this file to config.toml and customize as needed.
+
+# Logging configuration
+log_level = "info"   # trace, debug, info, warn, error
+log_format = "text"  # text, json
+
+# Web server
+# listen = "127.0.0.1:3000"   # TCP host:port
+# listen = "/run/org-wiki/org-wiki.sock"  # Unix domain socket
+# listen = "sd-listen"         # Inherit socket from systemd
+# frontend_path = "frontend/public"  # Compiled Elm frontend assets
+
+# ── Wiki content ────────────────────────────────────────────────────────────
+
+# Path to the git repository that holds the org-mode wiki content.
+# The server must have write access; it commits edits directly here.
+# content_repo = "/var/lib/org-wiki/content"
+
+# Git remote name to push to after each save (leave blank to skip push).
+# content_remote = "origin"
+
+# Path under content_repo where org files live.  Defaults to the repo root.
+# content_root = ""
+
+# ── HTML export and caching ─────────────────────────────────────────────────
+
+# Path to the Pandoc binary (defaults to "pandoc" on $PATH).
+# pandoc_bin = "pandoc"
+
+# Directory where rendered HTML fragments are cached.  Set to "" to disable
+# on-disk caching (render on every request — fine for low-traffic instances).
+# cache_dir = "/var/cache/org-wiki"
+
+# ── Site templates ───────────────────────────────────────────────────────────
+
+# Directory containing Tera HTML templates (page.html, edit.html, etc.).
+# template_dir = "templates"
+
+# Human-readable name shown in the site header.
+# site_title = "Org Wiki"
+
+# ── Authentication (OIDC) ────────────────────────────────────────────────────
+
+# OIDC provider discovery URL (issuer).  Must expose /.well-known/openid-configuration.
+# oidc_issuer = "https://auth.example.com"
+
+# OAuth2 client credentials registered with the OIDC provider.
+# oidc_client_id = "org-wiki"
+# oidc_client_secret = "changeme"
+
+# Public base URL of this org-wiki instance, used to construct the redirect URI.
+# base_url = "https://wiki.example.com"
+
+# ── Git commit identity ──────────────────────────────────────────────────────
+
+# Name and email used as the git Author for all server-side commits.
+# User identity is recorded via a Co-authored-by trailer.
+# commit_author_name = "Org Wiki"
+# commit_author_email = "wiki@example.com"
+
+# ── Webhooks ─────────────────────────────────────────────────────────────────
+
+# Shared secret for the incoming webhook endpoint (/webhook).
+# Used to validate push notifications from the git forge so the server
+# can pull external commits and flush the HTML cache.
+# webhook_secret = ""

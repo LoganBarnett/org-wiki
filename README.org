@@ -1,0 +1,81 @@
+#+title:     org-wiki
+#+author:    Logan Barnett
+#+email:     logustus@gmail.com
+#+language:  en
+
+A git-backed wiki where pages are authored in org-mode and served as HTML.
+Non-Emacs users can read and edit pages through a web interface; Emacs users
+and anyone comfortable with git can work directly with the source files.
+
+* Architecture overview
+
+** Content storage
+
+Wiki pages are =.org= files in a git repository.  The server holds a local
+clone and is the sole writer; every save through the web UI becomes a git
+commit.  A configured remote (typically on a Gitea instance) receives a push
+after each commit, and a webhook endpoint lets the server pull and
+cache-invalidate when edits arrive via the git interface.
+
+** Org-mode export
+
+Pages are exported to HTML by [[https://pandoc.org/][Pandoc]].  The server shells out to =pandoc= at
+render time and caches the resulting HTML fragment on disk.  The cache entry
+for a page is invalidated on each write to that page.
+
+Org Babel source blocks are exported as inert code; results already present
+in the document are exported as-is.  The server never executes Babel blocks.
+
+** Authentication
+
+The web UI is protected by an OIDC provider (configurable — targets
+Authelia backed by LDAP).  On first access the user is redirected through the
+standard authorization code flow; the resulting identity claim populates the
+session.
+
+** Commit attribution
+
+The server commits as a service identity (=commit_author_name= /
+=commit_author_email= in config).  The authenticated user's display name and
+email from the OIDC claims are recorded as a =Co-authored-by:= trailer in
+every commit, matching the model used by GitHub and Gitea web editors.
+
+** Editing
+
+The edit view presents a plain =<textarea>= alongside a "Preview" tab.
+Clicking Preview POSTs the current buffer to =/api/preview=, which runs
+Pandoc and returns the rendered HTML fragment — the same path used for
+full-page rendering.  Saving requires a commit summary (title) and an
+optional extended description, which become the commit message subject and
+body.
+
+* Project layout
+
+#+begin_src
+crates/
+  lib/    — core logic: git ops, pandoc export, HTML cache, page metadata
+  web/    — Axum web server: routes, OIDC auth, session management
+frontend/ — Elm UI (editor, preview tab, commit form)
+templates/  — Tera HTML templates (page shell, edit view)
+#+end_src
+
+* Development
+
+#+begin_src sh :exports code
+direnv allow          # activates the Nix dev shell
+cargo build --workspace
+cargo test --workspace
+#+end_src
+
+Copy =config.example.toml= to =config.toml= and fill in the required fields
+before running the server.
+
+* Configuration
+
+See =config.example.toml= for all available options and their defaults.
+
+* Roadmap
+
+- [ ] Phase 1 — Inert export: read, edit, preview, commit, push/pull, cache
+- [ ] Phase 2 — Babel execution permissions (opt-in, role-gated)
+- [ ] Phase 3 — Clustered edits (branch-per-session, review/merge UI)

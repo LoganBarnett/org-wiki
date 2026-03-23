@@ -1,0 +1,49 @@
+[package]
+name = "org-wiki-web"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lib]
+name = "org_wiki_web"
+path = "src/lib.rs"
+
+[[bin]]
+name = "org-wiki-web"
+path = "src/main.rs"
+
+[dependencies]
+org-wiki-lib = { workspace = true }
+clap = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+toml = { workspace = true }
+thiserror = { workspace = true }
+tap = { workspace = true }  # For method chaining, reduces superfluous locals
+axum = { workspace = true }
+tokio = { workspace = true }
+tokio-listener = { workspace = true }
+tower = { workspace = true }
+tower-http = { workspace = true }
+prometheus = { workspace = true }
+aide = { workspace = true }
+schemars = { workspace = true }
+sd-notify = { workspace = true }
+openidconnect = { workspace = true }
+reqwest = { workspace = true }
+tower-sessions = { workspace = true }
+uuid = { workspace = true }
+time = { workspace = true }
+url = { workspace = true }
+
+# tracing-journald connects to the systemd journal socket; unix-only.
+[target.'cfg(unix)'.dependencies]
+tracing-journald = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

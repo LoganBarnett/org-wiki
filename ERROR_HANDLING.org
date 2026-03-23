@@ -1,0 +1,443 @@
+#+TITLE: Error Handling Guidelines
+#+AUTHOR: DNS Smart Block Project
+#+OPTIONS: toc:2
+
+* Philosophy
+
+This project uses *semantic error types* with ~thiserror~ rather than
+generic error wrapping with ~anyhow~.
+
+** Why Not ~anyhow~?
+
+While ~anyhow~ is convenient, it encourages lazy error handling that
+loses important context.  Consider:
+
+#+BEGIN_SRC rust
+// BAD - Using anyhow blindly
+fn load_config() -> anyhow::Result<Config> {
+    // What file?  Why did it fail?
+    let contents = std::fs::read_to_string("config.toml")?;
+    // What was wrong with the TOML?
+    let config = toml::from_str(&contents)?;
+    Ok(config)
+}
+#+END_SRC
+
+When this fails, you get a generic error like "No such file or
+directory" with no context about:
+
+- *What* file was being read.
+- *When* in the application lifecycle this happened (startup?
+  runtime?).
+- *Why* it matters (configuration is required for startup).
+
+This is no better than a Python program that blows up with a stack
+trace.
+
+* Core Principle: Always Add Context
+
+*All errors must include sufficient context to diagnose the problem
+without access to the source code or the running environment.*
+
+** Why Context Matters
+
+When errors occur in production (especially in systemd services), you
+often only have access to logs.  Error messages without context make
+debugging difficult or impossible.
+
+*** Bad: Missing context
+
+#+BEGIN_SRC rust
+let content = std::fs::read_to_string(path)
+  .map_err(|e| {
+    error!("Failed to read file: {}", e);
+    e
+  })?;
+#+END_SRC
+
+Error message: ~Failed to read file: No such file or directory (os
+error 2)~
+
+Questions this leaves unanswered:
+- What file was it trying to read?
+- What was the current working directory?
+
+*** Good: Includes full context
+
+#+BEGIN_SRC rust
+let content = std::fs::read_to_string(&path)
+  .map_err(|e| {
+    let cwd = std::env::current_dir()
+      .map(|p| p.display().to_string())
+      .unwrap_or_else(|_| "<unknown>".to_string());
+    error!(
+      "Failed to read file '{}': {} (current directory: {})",
+      path.display(), e, cwd
+    );
+    e
+  })?;
+#+END_SRC
+
+Error message: ~Failed to read file '/var/lib/app/config.toml': No
+such file or directory (os error 2) (current directory: /)~
+
+This tells you:
+- Clear what file was attempted.
+- Shows the current working directory for relative path debugging.
+
+* Error Type Design with ~thiserror~
+
+Use semantic error types that explain what went wrong and why it
+matters:
+
+#+BEGIN_SRC rust
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+pub enum ConfigError {
+    #[error("Failed to read configuration file at {path:?} during \
+startup: {source}")]
+    FileRead {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+
+    #[error("Failed to parse configuration file at {path:?}: \
+{source}")]
+    Parse {
+        path: PathBuf,
+        #[source]
+        source: toml::de::Error,
+    },
+
+    #[error("Configuration validation failed: {0}")]
+    Validation(String),
+}
+
+fn load_config() -> Result<Config, ConfigError> {
+    let path = PathBuf::from("config.toml");
+
+    let contents = std::fs::read_to_string(&path)
+        .map_err(|source| ConfigError::FileRead {
+            path: path.clone(),
+            source,
+        })?;
+
+    let config = toml::from_str(&contents)
+        .map_err(|source| ConfigError::Parse {
+            path: path.clone(),
+            source,
+        })?;
+
+    Ok(config)
+}
+#+END_SRC
+
+Now when it fails, you get:
+
+#+BEGIN_EXAMPLE
+Failed to read configuration file at "config.toml" during startup:
+Permission denied (os error 13)
+#+END_EXAMPLE
+
+This tells you:
+- *What*: The configuration file at "config.toml".
+- *When*: During startup.
+- *Why*: Permission denied.
+- *How to fix*: Check file permissions.
+
+** Error Type Hierarchy
+
+Structure your error types in layers:
+
+1. *Low-level errors* (in libraries/modules) -- specific to that
+   component.
+2. *Mid-level errors* (in business logic) -- domain-specific.
+3. *Top-level errors* (in main.rs) -- application lifecycle errors.
+
+Example hierarchy:
+
+#+BEGIN_EXAMPLE
+ApplicationError::ConfigurationLoad
+    └─ ConfigError::FileRead
+        └─ std::io::Error (Permission denied)
+#+END_EXAMPLE
+
+Each layer adds context about what the application was trying to do.
+
+** When ~anyhow~ Might Be Acceptable
+
+The only time ~anyhow~ is acceptable is for *quick prototypes* or
+*throwaway scripts* where you're iterating rapidly.  Once you know
+what errors can occur, convert to semantic error types.
+
+Even in main(), we use semantic error types because the user deserves
+informative error messages.
+
+* Context to Include
+
+** File Operations
+
+Always include:
+
+1. *File path* -- The exact path being accessed.
+2. *Current working directory* -- For relative path debugging.
+3. *Operation* -- What you were trying to do (read, write, open,
+   etc.).
+4. *Underlying error* -- The OS/library error message.
+
+Example:
+
+#+BEGIN_SRC rust
+let template_path = "templates/index.html";
+let template = std::fs::read_to_string(template_path)
+  .unwrap_or_else(|e| {
+    let cwd = std::env::current_dir()
+      .map(|p| p.display().to_string())
+      .unwrap_or_else(|_| "<unknown>".to_string());
+    error!(
+      "Failed to read template file '{}': {} (current directory: {})",
+      template_path, e, cwd
+    );
+    // Return fallback or propagate error
+  });
+#+END_SRC
+
+** Network Operations
+
+Always include:
+
+1. *URL/Address* -- What you were trying to connect to.
+2. *Operation* -- Connect, send, receive, etc.
+3. *Timeout values* -- If applicable.
+4. *Underlying error* -- The network error.
+
+Example:
+
+#+BEGIN_SRC rust
+let response = client.get(&url)
+  .send()
+  .await
+  .map_err(|e| {
+    error!("Failed to fetch from '{}': {}", url, e);
+    e
+  })?;
+#+END_SRC
+
+** Database Operations
+
+Always include:
+
+1. *Query/Operation type* -- SELECT, INSERT, etc.
+2. *Table name* -- Which table was involved.
+3. *Key identifiers* -- IDs or filters (sanitized).
+4. *Underlying error* -- Database error message.
+
+Example:
+
+#+BEGIN_SRC rust
+let result = sqlx::query("SELECT * FROM domains WHERE domain = $1")
+  .bind(&domain)
+  .fetch_optional(&pool)
+  .await
+  .map_err(|e| {
+    error!(
+      "Failed to query domain '{}' from domains table: {}",
+      domain, e
+    );
+    e
+  })?;
+#+END_SRC
+
+** Parsing/Validation Errors
+
+Always include:
+
+1. *Input value* -- What was being parsed (if not sensitive).
+2. *Expected format* -- What format was expected.
+3. *Validation rule* -- Which rule failed.
+4. *Underlying error* -- Parser error.
+
+Example:
+
+#+BEGIN_SRC rust
+let timestamp = DateTime::parse_from_rfc3339(&input)
+  .map_err(|e| {
+    error!(
+      "Failed to parse timestamp '{}' as RFC3339: {}",
+      input, e
+    );
+    e
+  })?;
+#+END_SRC
+
+* Logging Levels
+
+Use appropriate log levels for different severity:
+
+- ~error!()~ -- For errors that prevent normal operation.
+- ~warn!()~ -- For recoverable issues or degraded functionality.
+- ~info!()~ -- For important state changes.
+- ~debug!()~ -- For detailed diagnostic information.
+- ~trace!()~ -- For very verbose debugging.
+
+* Security Considerations
+
+** Never Log Sensitive Data
+
+Bad example:
+
+#+BEGIN_SRC rust
+error!("Authentication failed for user {} with password {}",
+       username, password);
+#+END_SRC
+
+Good example:
+
+#+BEGIN_SRC rust
+error!("Authentication failed for user '{}'", username);
+#+END_SRC
+
+** Sanitize URLs and Connection Strings
+
+Bad example:
+
+#+BEGIN_SRC rust
+error!("Failed to connect to database: {}", database_url);
+// Might leak: postgres://user:password@host/db
+#+END_SRC
+
+Good example:
+
+#+BEGIN_SRC rust
+let sanitized_url = if let Ok(mut url) = Url::parse(&database_url) {
+  let _ = url.set_password(Some("***"));
+  url.to_string()
+} else {
+  "<invalid-url>".to_string()
+};
+error!("Failed to connect to database: {}", sanitized_url);
+#+END_SRC
+
+* Testing Error Messages
+
+Write tests to verify error messages contain the expected context:
+
+#+BEGIN_SRC rust
+#[test]
+fn test_missing_config_file_error() {
+    let result = Config::from_file(Path::new("nonexistent.toml"));
+
+    let err = result.unwrap_err();
+    let msg = err.to_string();
+
+    // Verify the error message includes context
+    assert!(msg.contains("nonexistent.toml"));
+    assert!(msg.contains("startup") || msg.contains("configuration"));
+}
+
+#[test]
+fn test_file_error_includes_path() {
+  let path = "/nonexistent/file.txt";
+  let error = std::io::Error::new(
+    std::io::ErrorKind::NotFound,
+    "No such file or directory"
+  );
+
+  let error_msg = format!(
+    "Failed to read file '{}': {}",
+    path, error
+  );
+
+  assert!(error_msg.contains(path));
+  assert!(error_msg.contains("Failed to read file"));
+}
+#+END_SRC
+
+* Guidelines
+
+** Every Error Variant Should Explain Context
+
+- What operation failed.
+- Why it matters.
+- Include relevant data (file paths, addresses, etc.).
+
+** Use ~#[source]~ for Error Chains
+
+- Preserves the full error chain.
+- Allows inspection of root causes.
+- Works with error reporting libraries.
+
+** Be Specific in Error Messages
+
+Bad example:
+
+#+BEGIN_SRC rust
+#[error("File error: {0}")]
+FileError(std::io::Error),
+#+END_SRC
+
+Good example:
+
+#+BEGIN_SRC rust
+#[error("Failed to read configuration file at {path:?} during \
+application startup: {source}")]
+ConfigFileRead {
+    path: PathBuf,
+    #[source]
+    source: std::io::Error,
+},
+#+END_SRC
+
+** Handle Errors at the Right Level
+
+- Don't catch errors too early (loses context).
+- Don't let errors bubble up without adding context.
+- Transform errors to add domain-specific context.
+
+** Document Expected Errors
+
+#+BEGIN_SRC rust
+/// Loads configuration from the specified path.
+///
+/// # Errors
+///
+/// Returns `ConfigError::FileRead` if the file cannot be read
+/// (missing file, permission denied, etc.).
+///
+/// Returns `ConfigError::Parse` if the file contents are not valid
+/// TOML.
+pub fn load_config(path: &Path) -> Result<Config, ConfigError> {
+    // ...
+}
+#+END_SRC
+
+* Checklist
+
+Before committing code with error handling, verify:
+
+- [ ] Error message includes what operation was attempted.
+- [ ] Error message includes all relevant identifiers (paths, URLs,
+  IDs).
+- [ ] For file operations, current working directory is logged.
+- [ ] Sensitive data (passwords, tokens) is not logged.
+- [ ] Error type/variant is specific enough to understand the cause.
+- [ ] Underlying error is preserved/logged.
+- [ ] Error message would be helpful to someone debugging in
+  production.
+
+* Examples in the Codebase
+
+See these files for examples of good error handling:
+
+- ~blocklist-server/src/main.rs~ -- Template loading, database
+  password file reading.
+- ~blocklist-server/tests/error_messages.rs~ -- Tests for error
+  message format.
+
+* Additional Resources
+
+- [[https://docs.rs/thiserror/][thiserror documentation]]
+- [[https://doc.rust-lang.org/book/ch09-00-error-handling.html][Error Handling in Rust]]
+- [[https://blog.burntsushi.net/rust-error-handling/][Rust Error Handling Survey]]
