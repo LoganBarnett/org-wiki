@@ -199,10 +199,12 @@ pub async fn callback_handler(
   }
 
   // 6. Redirect to where the user was going (or home).
+  // Validate to a relative path so a stuffed session can't open-redirect.
   let return_to: String = session
     .remove(KEY_RETURN_TO)
     .await
     .unwrap_or(None)
+    .filter(|u: &String| u.starts_with('/') && !u.starts_with("//"))
     .unwrap_or_else(|| "/".to_owned());
 
   Redirect::to(&return_to).into_response()

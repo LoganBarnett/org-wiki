@@ -108,8 +108,7 @@ async fn main() -> Result<(), ApplicationError> {
 fn create_app(state: AppState) -> Router {
   // Session middleware (in-memory store; swap for a persistent store later).
   let session_store = MemoryStore::default();
-  let session_layer =
-    SessionManagerLayer::new(session_store).with_secure(false); // set to true when serving over HTTPS
+  let session_layer = SessionManagerLayer::new(session_store).with_secure(true);
 
   // Protected routes: inject state first so the router is Router<()>,
   // then wrap with the auth middleware (which itself is stateless).
