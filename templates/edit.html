@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+
+{% block title %}Editing {{ page_title }} — {{ site_title }}{% endblock title %}
+
+{% block content %}
+<h1>Editing: {{ page_title }}</h1>
+
+{% if error %}
+  <div class="flash-error">{{ error }}</div>
+{% endif %}
+
+<div id="editor-root">
+  <div class="tab-bar">
+    <button id="btn-write" onclick="showTab('write')">Write</button>
+    <button id="btn-preview" onclick="showTab('preview')">Preview</button>
+  </div>
+
+  <div id="tab-write">
+    <textarea
+      id="editor"
+      spellcheck="false"
+      style="
+        width: 100%;
+        min-height: 480px;
+        font-family: 'Menlo', 'Consolas', monospace;
+        font-size: 0.9rem;
+        padding: 0.75rem;
+        border: 1px solid #ccc;
+        border-radius: 3px;
+        resize: vertical;
+      "
+    >{{ content }}</textarea>
+  </div>
+
+  <div id="tab-preview" style="display: none;">
+    <div id="preview-content" style="
+      min-height: 480px;
+      border: 1px solid #ccc;
+      border-radius: 3px;
+      padding: 0.75rem 1.5rem;
+    "></div>
+  </div>
+
+  <form
+    id="save-form"
+    action="/api/save/{{ page_path }}"
+    method="post"
+    style="margin-top: 1.5rem; border-top: 1px solid #ddd; padding-top: 1rem;"
+  >
+    <input type="hidden" id="content-hidden" name="content" value="">
+    <div style="margin-bottom: 0.75rem;">
+      <label for="subject" style="display: block; font-weight: bold; margin-bottom: 0.25rem;">
+        Edit summary <span style="color: #c00;">*</span>
+      </label>
+      <input
+        type="text"
+        id="subject"
+        name="subject"
+        required
+        placeholder="Brief description of your change"
+        style="width: 100%; padding: 0.4rem 0.6rem; border: 1px solid #ccc; border-radius: 3px;"
+      >
+    </div>
+    <div style="margin-bottom: 1rem;">
+      <label for="body" style="display: block; font-weight: bold; margin-bottom: 0.25rem;">
+        Extended description <span style="color: #999; font-weight: normal;">(optional)</span>
+      </label>
+      <textarea
+        id="body"
+        name="body"
+        placeholder="Additional context, motivation, or notes"
+        style="
+          width: 100%;
+          height: 6rem;
+          padding: 0.4rem 0.6rem;
+          border: 1px solid #ccc;
+          border-radius: 3px;
+          resize: vertical;
+          font-family: inherit;
+        "
+      ></textarea>
+    </div>
+    <button type="submit" style="padding: 0.5rem 1.25rem;">Save changes</button>
+    <a href="/{{ page_path }}" style="margin-left: 1rem; color: #555;">Cancel</a>
+  </form>
+</div>
+
+<style>
+  .tab-bar { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; }
+  .tab-bar button {
+    padding: 0.3rem 0.8rem;
+    border: 1px solid #ccc;
+    background: #f5f5f5;
+    cursor: pointer;
+    border-radius: 3px 3px 0 0;
+  }
+  .tab-bar button.active { background: #fff; border-bottom-color: #fff; }
+</style>
+
+<script>
+  (function () {
+    function showTab(tab) {
+      const writeEl = document.getElementById('tab-write');
+      const previewEl = document.getElementById('tab-preview');
+      document.getElementById('btn-write').classList.toggle('active', tab === 'write');
+      document.getElementById('btn-preview').classList.toggle('active', tab === 'preview');
+
+      if (tab === 'preview') {
+        writeEl.style.display = 'none';
+        previewEl.style.display = 'block';
+        const content = document.getElementById('editor').value;
+        fetch('/api/preview', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content }),
+        })
+          .then(function (r) { return r.text(); })
+          .then(function (html) {
+            document.getElementById('preview-content').innerHTML = html;
+          })
+          .catch(function (err) {
+            document.getElementById('preview-content').textContent =
+              'Preview failed: ' + err;
+          });
+      } else {
+        writeEl.style.display = 'block';
+        previewEl.style.display = 'none';
+      }
+    }
+
+    window.showTab = showTab;
+    showTab('write');
+
+    document.getElementById('save-form').addEventListener('submit', function () {
+      document.getElementById('content-hidden').value =
+        document.getElementById('editor').value;
+    });
+  })();
+</script>
+{% endblock content %}

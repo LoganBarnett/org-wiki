@@ -9,7 +9,7 @@ use tower::ServiceExt;
 // Tests that don't exercise the SPA fallback use a non-existent path since
 // the registered API routes never touch the filesystem.
 fn state_without_frontend() -> AppState {
-  AppState::new(PathBuf::from("/nonexistent"))
+  AppState::new_for_test(PathBuf::from("/nonexistent"))
 }
 
 #[tokio::test]
@@ -128,7 +128,8 @@ async fn test_spa_fallback_serves_index_html() {
   )
   .unwrap();
 
-  let app = base_router(AppState::new(frontend_dir.path().to_path_buf()));
+  let app =
+    base_router(AppState::new_for_test(frontend_dir.path().to_path_buf()));
 
   for path in ["/some-page", "/nested/route", "/unknown"] {
     let response = app

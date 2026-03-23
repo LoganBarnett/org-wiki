@@ -1,37 +1,46 @@
-//! org-wiki-web - Web service application template
+//! org-wiki-web — wiki web server
 //!
-//! # LLM Development Guidelines
-//! When modifying this code:
-//! - Keep configuration logic in config.rs
-//! - Keep base web functionality (healthz, metrics, openapi) in web_base.rs
-//! - Add new endpoints in separate modules, not in main.rs
-//! - Maintain the staged configuration pattern (CliRaw -> ConfigFileRaw -> Config)
-//! - Use semantic error types with thiserror - NO anyhow blindly wrapping errors
-//! - Add context at each error site explaining WHAT failed and WHY
-//! - Preserve graceful shutdown handling (SIGTERM/SIGINT)
-//! - Keep logging structured and consistent
-//! - Preserve systemd::notify_ready() and systemd::spawn_watchdog() after bind
+//! Route layout:
+//!   GET  /                  → redirect to /index.org
+//!   GET  /*path             → render wiki page (unauthenticated)
+//!   GET  /edit/*path        → edit form          (requires auth)
+//!   POST /api/preview       → org → HTML fragment (requires auth)
+//!   POST /api/save/*path    → commit + push       (requires auth)
+//!   POST /webhook           → git push event      (HMAC-verified)
+//!   GET  /auth/login        → initiate OIDC flow
+//!   GET  /auth/callback     → OIDC callback
+//!   GET  /auth/logout       → clear session
+//!   GET  /healthz           → health check
+//!   GET  /metrics           → Prometheus metrics
 
-mod config;
+mod auth;
 mod logging;
+mod routes;
 mod systemd;
 
-use org_wiki_web::web_base;
+use org_wiki_web::config::{CliRaw, Config, ConfigError};
+use org_wiki_web::web_base::{self, AppState, AppStateError};
 
-use axum::{serve, Router};
+use axum::{
+  middleware,
+  routing::{get, post},
+  Router,
+};
 use clap::Parser;
-use config::{CliRaw, Config, ConfigError};
 use logging::init_logging;
 use thiserror::Error;
 use tokio::signal;
 use tower_http::trace::TraceLayer;
+use tower_sessions::{MemoryStore, SessionManagerLayer};
 use tracing::{error, info};
-use web_base::AppState;
 
 #[derive(Debug, Error)]
 enum ApplicationError {
   #[error("Failed to load configuration during startup: {0}")]
   ConfigurationLoad(#[from] ConfigError),
+
+  #[error("Failed to initialise application state: {0}")]
+  StateInit(#[from] AppStateError),
 
   #[error("Failed to bind listener to {address}: {source}")]
   ListenerBind {
@@ -55,10 +64,13 @@ async fn main() -> Result<(), ApplicationError> {
   init_logging(config.log_level, config.log_format);
 
   info!("Starting org-wiki-web");
-  info!("Configuration loaded successfully");
-  info!("Binding to {}", config.listen_address);
 
-  let state = AppState::new(config.frontend_path.clone());
+  let state = AppState::init(&config).await.map_err(|e| {
+    error!("Failed to initialise app state: {e}");
+    ApplicationError::StateInit(e)
+  })?;
+
+  info!("Binding to {}", config.listen_address);
 
   let app = create_app(state);
 
@@ -81,7 +93,7 @@ async fn main() -> Result<(), ApplicationError> {
   systemd::notify_ready();
   systemd::spawn_watchdog();
 
-  serve(listener, app.into_make_service())
+  axum::serve(listener, app.into_make_service())
     .with_graceful_shutdown(shutdown_signal())
     .await
     .map_err(|e| {
@@ -94,7 +106,47 @@ async fn main() -> Result<(), ApplicationError> {
 }
 
 fn create_app(state: AppState) -> Router {
-  web_base::base_router(state).layer(TraceLayer::new_for_http())
+  // Session middleware (in-memory store; swap for a persistent store later).
+  let session_store = MemoryStore::default();
+  let session_layer =
+    SessionManagerLayer::new(session_store).with_secure(false); // set to true when serving over HTTPS
+
+  // Protected routes: inject state first so the router is Router<()>,
+  // then wrap with the auth middleware (which itself is stateless).
+  let protected = Router::new()
+    .route("/edit/{*path}", get(routes::pages::edit_handler))
+    .route("/api/preview", post(routes::api::preview_handler))
+    .route("/api/save/{*path}", post(routes::api::save_handler))
+    .with_state(state.clone())
+    .layer(middleware::from_fn(auth::require_auth));
+
+  // Auth routes.
+  let auth_routes = Router::new()
+    .route("/auth/login", get(auth::login_handler))
+    .route("/auth/callback", get(auth::callback_handler))
+    .route("/auth/logout", get(auth::logout_handler))
+    .with_state(state.clone());
+
+  // Webhook (HMAC-verified internally).
+  let webhook_route = Router::new()
+    .route("/webhook", post(routes::webhook::webhook_handler))
+    .with_state(state.clone());
+
+  // Public wiki page routes (unauthenticated reads).
+  let wiki_routes = Router::new()
+    .route("/", get(routes::pages::index_handler))
+    .route("/{*path}", get(routes::pages::page_handler))
+    .with_state(state.clone());
+
+  // All subrouters are now Router<()> — merge into base and apply outer layers.
+  Router::new()
+    .merge(web_base::base_router(state))
+    .merge(protected)
+    .merge(auth_routes)
+    .merge(webhook_route)
+    .merge(wiki_routes)
+    .layer(session_layer)
+    .layer(TraceLayer::new_for_http())
 }
 
 async fn shutdown_signal() {
@@ -116,11 +168,11 @@ async fn shutdown_signal() {
   let terminate = std::future::pending::<()>();
 
   tokio::select! {
-      _ = ctrl_c => {
-          info!("Received Ctrl+C, shutting down gracefully");
-      },
-      _ = terminate => {
-          info!("Received SIGTERM, shutting down gracefully");
-      },
+    _ = ctrl_c => {
+      info!("Received Ctrl+C, shutting down gracefully");
+    },
+    _ = terminate => {
+      info!("Received SIGTERM, shutting down gracefully");
+    },
   }
 }

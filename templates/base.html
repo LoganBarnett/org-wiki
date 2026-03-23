@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{{ page_title }} — {{ site_title }}{% endblock title %}</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      font-family: Georgia, 'Times New Roman', serif;
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 0 1.5rem 3rem;
+      color: #222;
+      line-height: 1.65;
+    }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      border-bottom: 1px solid #ddd;
+      padding: 0.75rem 0;
+      margin-bottom: 2rem;
+    }
+    header a { text-decoration: none; color: inherit; }
+    header .site-name { font-weight: bold; font-size: 1.1rem; }
+    header nav { display: flex; gap: 1rem; font-size: 0.9rem; }
+    header nav a { color: #555; }
+    code, pre { font-family: 'Menlo', 'Consolas', monospace; }
+    pre {
+      background: #f6f6f6;
+      padding: 1rem;
+      overflow-x: auto;
+      border-radius: 3px;
+    }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid #ddd; padding: 0.4rem 0.75rem; text-align: left; }
+    th { background: #f0f0f0; }
+    .page-actions { margin-top: 2.5rem; font-size: 0.85rem; color: #777; }
+    .page-actions a { color: #555; }
+    .flash-error {
+      background: #fff0f0;
+      border: 1px solid #e88;
+      padding: 0.6rem 1rem;
+      margin-bottom: 1.5rem;
+      border-radius: 3px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <a class="site-name" href="/">{{ site_title }}</a>
+    <nav>
+      {% if user %}
+        <span>{{ user.name }}</span>
+        <a href="/auth/logout">Sign out</a>
+      {% else %}
+        <a href="/auth/login">Sign in</a>
+      {% endif %}
+    </nav>
+  </header>
+  {% block content %}{% endblock content %}
+</body>
+</html>

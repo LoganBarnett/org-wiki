@@ -69,13 +69,13 @@ orgize = "0.10.0-alpha.10"
 tera = "1"
 
 # OIDC / OAuth2 authentication
-openidconnect = "3"
+openidconnect = { version = "3", features = ["reqwest"] }
 
 # HTTP client — OIDC token exchange, discovery
 reqwest = { version = "0.12", features = ["json"] }
 
 # Session management
-tower-sessions = "0.14"
+tower-sessions = { version = "0.14", features = ["memory-store"] }
 
 # Cryptographically-random UUIDs for session IDs
 uuid = { version = "1", features = ["v4"] }
@@ -85,6 +85,11 @@ time = { version = "0.3", features = ["serde"] }
 
 # URL type — OIDC issuer, redirect URIs
 url = "2"
+
+# Webhook signature verification
+hmac = "0.12"
+sha2 = "0.10"
+hex = "0.4"
 
 # ============================================================================
 # BUILD PROFILES

@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+
+{% block content %}
+<article class="org-page">
+  {{ content | safe }}
+</article>
+
+<div class="page-actions">
+  {% if user %}
+    <a href="/edit/{{ page_path }}">Edit this page</a>
+  {% endif %}
+</div>
+{% endblock content %}

@@ -40,10 +40,15 @@ tower-sessions = { workspace = true }
 uuid = { workspace = true }
 time = { workspace = true }
 url = { workspace = true }
+tera = { workspace = true }
+hmac = { workspace = true }
+sha2 = { workspace = true }
+hex = { workspace = true }
+git2 = { workspace = true }
+tempfile = { workspace = true }
 
 # tracing-journald connects to the systemd journal socket; unix-only.
 [target.'cfg(unix)'.dependencies]
 tracing-journald = { workspace = true }
 
 [dev-dependencies]
-tempfile = { workspace = true }
