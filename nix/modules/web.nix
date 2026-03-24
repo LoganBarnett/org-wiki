@@ -243,6 +243,9 @@ in {
       requires =
         lib.optional (cfg.socket != null) "org-wiki-web.socket";
 
+      # git must be on PATH for commit and push operations.
+      path = [pkgs.git];
+
       environment =
         {
           LOG_LEVEL = cfg.logLevel;
@@ -262,9 +265,6 @@ in {
           OIDC_CLIENT_ID = cfg.oidcClientId;
           OIDC_CLIENT_SECRET_FILE = "/run/credentials/org-wiki-web.service/oidc-client-secret";
           BASE_URL = cfg.baseUrl;
-          # Git requires a PATH with its binary; include wrappers for sudo
-          # et al. in case any hook scripts need them.
-          PATH = "${pkgs.git}/bin:/run/wrappers/bin:/usr/local/bin:/usr/bin:/bin";
         }
         // lib.optionalAttrs (cfg.contentRemote != null) {
           CONTENT_REMOTE = cfg.contentRemote;
