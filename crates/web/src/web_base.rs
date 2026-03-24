@@ -127,12 +127,16 @@ impl AppState {
     ))
     .map_err(|e| AppStateError::InvalidRedirectUri(e.to_string()))?;
 
+    // RequestBody sends client credentials in the POST body (client_secret_post),
+    // matching the token_endpoint_auth_method configured in Authelia.  The
+    // openidconnect default (BasicAuth) causes Authelia to reject the exchange.
     let oidc_client = openidconnect::core::CoreClient::from_provider_metadata(
       provider_metadata,
       openidconnect::ClientId::new(config.oidc_client_id.clone()),
       Some(openidconnect::ClientSecret::new(config.oidc_client_secret.clone())),
     )
-    .set_redirect_uri(redirect_url);
+    .set_redirect_uri(redirect_url)
+    .set_auth_type(openidconnect::AuthType::RequestBody);
 
     Ok(Self {
       registry: Arc::new(registry),
