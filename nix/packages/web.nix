@@ -61,5 +61,6 @@ in
     postBuild = ''
       mkdir -p $out/share/org-wiki-web
       ln -s ${elmFrontend} $out/share/org-wiki-web/frontend
+      ln -s ${../../templates} $out/share/org-wiki-web/templates
     '';
   }

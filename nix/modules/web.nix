@@ -7,6 +7,11 @@
 #
 #   services.org-wiki-web = {
 #     enable = true;
+#     contentRepo = "/var/lib/org-wiki-web/content";
+#     oidcIssuer = "https://authelia.example.com";
+#     oidcClientId = "wiki";
+#     oidcClientSecretFile = config.age.secrets.wiki-oidc-client-secret.path;
+#     baseUrl = "https://wiki.example.com";
 #   };
 #
 # To use TCP instead:
@@ -15,6 +20,7 @@
 #     enable = true;
 #     socket = null;
 #     port   = 8080;
+#     ...
 #   };
 #
 # To reference the socket from a reverse proxy (e.g. nginx):
@@ -102,6 +108,100 @@ in {
       default = "org-wiki-web";
       description = "System group the service runs as.";
     };
+
+    # ── wiki content ──────────────────────────────────────────────────────
+
+    contentRepo = lib.mkOption {
+      type = lib.types.str;
+      default = "/var/lib/org-wiki-web/content";
+      description = "Path to the git repository holding the org-mode wiki content.";
+    };
+
+    contentRemote = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      description = "Git remote name to push to after each save.  Null to disable push.";
+    };
+
+    pandocBin = lib.mkOption {
+      type = lib.types.package;
+      default = pkgs.pandoc;
+      defaultText = lib.literalExpression "pkgs.pandoc";
+      description = "Package providing the pandoc binary.";
+    };
+
+    cacheDir = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      description = "Directory for cached HTML fragments.  Null to disable caching.";
+    };
+
+    templateDir = lib.mkOption {
+      type = lib.types.str;
+      default = "${cfg.package}/share/org-wiki-web/templates";
+      defaultText =
+        lib.literalExpression
+        ''"''${cfg.package}/share/org-wiki-web/templates"'';
+      description = "Directory containing Tera HTML templates.";
+    };
+
+    siteTitle = lib.mkOption {
+      type = lib.types.str;
+      default = "Org Wiki";
+      description = "Human-readable site name shown in the HTML header.";
+    };
+
+    # ── git commit identity ───────────────────────────────────────────────
+
+    commitAuthorName = lib.mkOption {
+      type = lib.types.str;
+      default = "Org Wiki";
+      description = "Name used as the git Author on server-side commits.";
+    };
+
+    commitAuthorEmail = lib.mkOption {
+      type = lib.types.str;
+      default = "wiki@localhost";
+      description = "Email used as the git Author on server-side commits.";
+    };
+
+    # ── OIDC ─────────────────────────────────────────────────────────────
+
+    oidcIssuer = lib.mkOption {
+      type = lib.types.str;
+      description = "OIDC provider issuer URL (must expose /.well-known/openid-configuration).";
+    };
+
+    oidcClientId = lib.mkOption {
+      type = lib.types.str;
+      description = "OAuth2 client ID registered with the OIDC provider.";
+    };
+
+    oidcClientSecretFile = lib.mkOption {
+      type = lib.types.path;
+      description = "Path to a file containing the OAuth2 client secret.";
+    };
+
+    baseUrl = lib.mkOption {
+      type = lib.types.str;
+      description = "Public base URL of this org-wiki instance (used to build the OIDC redirect URI).";
+    };
+
+    # ── webhook ───────────────────────────────────────────────────────────
+
+    webhookSecretFile = lib.mkOption {
+      type = lib.types.nullOr lib.types.path;
+      default = null;
+      description = "Path to a file containing the webhook HMAC-SHA256 shared secret.  Null to accept all requests without verification.";
+    };
+
+    # ── SSH deploy key ────────────────────────────────────────────────────
+
+    sshKeyFile = lib.mkOption {
+      type = lib.types.nullOr lib.types.path;
+      default = null;
+      description = "Path to an SSH private key used for pushing to the git remote.  Null to use the default SSH configuration.";
+    };
   };
 
   config = lib.mkIf cfg.enable {
@@ -143,10 +243,44 @@ in {
       requires =
         lib.optional (cfg.socket != null) "org-wiki-web.socket";
 
-      environment = {
-        LOG_LEVEL = cfg.logLevel;
-        LOG_FORMAT = cfg.logFormat;
-      };
+      environment =
+        {
+          LOG_LEVEL = cfg.logLevel;
+          LOG_FORMAT = cfg.logFormat;
+          LISTEN =
+            if cfg.socket != null
+            then "sd-listen"
+            else "${cfg.host}:${toString cfg.port}";
+          FRONTEND_PATH = cfg.frontendPath;
+          CONTENT_REPO = cfg.contentRepo;
+          PANDOC_BIN = "${cfg.pandocBin}/bin/pandoc";
+          TEMPLATE_DIR = cfg.templateDir;
+          SITE_TITLE = cfg.siteTitle;
+          COMMIT_AUTHOR_NAME = cfg.commitAuthorName;
+          COMMIT_AUTHOR_EMAIL = cfg.commitAuthorEmail;
+          OIDC_ISSUER = cfg.oidcIssuer;
+          OIDC_CLIENT_ID = cfg.oidcClientId;
+          OIDC_CLIENT_SECRET_FILE = "/run/credentials/org-wiki-web.service/oidc-client-secret";
+          BASE_URL = cfg.baseUrl;
+          # Git requires a PATH with its binary; include wrappers for sudo
+          # et al. in case any hook scripts need them.
+          PATH = "${pkgs.git}/bin:/run/wrappers/bin:/usr/local/bin:/usr/bin:/bin";
+        }
+        // lib.optionalAttrs (cfg.contentRemote != null) {
+          CONTENT_REMOTE = cfg.contentRemote;
+        }
+        // lib.optionalAttrs (cfg.cacheDir != null) {
+          CACHE_DIR = cfg.cacheDir;
+        }
+        // lib.optionalAttrs (cfg.webhookSecretFile != null) {
+          WEBHOOK_SECRET_FILE = "/run/credentials/org-wiki-web.service/webhook-secret";
+        }
+        // lib.optionalAttrs (cfg.sshKeyFile != null) {
+          GIT_SSH_COMMAND =
+            "ssh -i /run/credentials/org-wiki-web.service/ssh-key"
+            + " -o StrictHostKeyChecking=accept-new"
+            + " -o UserKnownHostsFile=/var/lib/org-wiki-web/.ssh/known_hosts";
+        };
 
       serviceConfig = {
         # Type = notify causes systemd to wait for the binary to call
@@ -162,19 +296,21 @@ in {
         # Override via systemd.services.org-wiki-web.serviceConfig.WatchdogSec.
         WatchdogSec = lib.mkDefault "30s";
 
-        ExecStart =
-          "${cfg.package}/bin/org-wiki-web"
-          + (
-            if cfg.socket != null
-            then " --listen sd-listen"
-            else " --listen ${cfg.host}:${toString cfg.port}"
-          )
-          + " --frontend-path ${cfg.frontendPath}";
+        ExecStart = "${cfg.package}/bin/org-wiki-web";
 
         User = cfg.user;
         Group = cfg.group;
         Restart = "on-failure";
         RestartSec = "5s";
+
+        StateDirectory = cfg.user;
+
+        LoadCredential =
+          ["oidc-client-secret:${cfg.oidcClientSecretFile}"]
+          ++ lib.optional (cfg.webhookSecretFile != null)
+          "webhook-secret:${cfg.webhookSecretFile}"
+          ++ lib.optional (cfg.sshKeyFile != null)
+          "ssh-key:${cfg.sshKeyFile}";
 
         # Harden the service environment.
         NoNewPrivileges = true;

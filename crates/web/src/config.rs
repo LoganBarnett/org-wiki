@@ -104,6 +104,10 @@ pub struct CliRaw {
   #[arg(long, env = "OIDC_CLIENT_SECRET")]
   pub oidc_client_secret: Option<String>,
 
+  /// Path to a file containing the OAuth2 client secret
+  #[arg(long, env = "OIDC_CLIENT_SECRET_FILE")]
+  pub oidc_client_secret_file: Option<PathBuf>,
+
   /// Public base URL of this org-wiki instance (used to build the OIDC redirect URI)
   #[arg(long, env = "BASE_URL")]
   pub base_url: Option<String>,
@@ -113,6 +117,10 @@ pub struct CliRaw {
   /// If omitted, the /webhook endpoint accepts all requests without verification.
   #[arg(long, env = "WEBHOOK_SECRET")]
   pub webhook_secret: Option<String>,
+
+  /// Path to a file containing the webhook shared secret
+  #[arg(long, env = "WEBHOOK_SECRET_FILE")]
+  pub webhook_secret_file: Option<PathBuf>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -135,9 +143,11 @@ pub struct ConfigFileRaw {
   pub oidc_issuer: Option<String>,
   pub oidc_client_id: Option<String>,
   pub oidc_client_secret: Option<String>,
+  pub oidc_client_secret_file: Option<PathBuf>,
   pub base_url: Option<String>,
   // webhook
   pub webhook_secret: Option<String>,
+  pub webhook_secret_file: Option<PathBuf>,
 }
 
 impl ConfigFileRaw {
@@ -298,8 +308,19 @@ impl Config {
     let oidc_client_secret = cli
       .oidc_client_secret
       .or(config_file.oidc_client_secret)
+      .or_else(|| {
+        let path = cli
+          .oidc_client_secret_file
+          .or(config_file.oidc_client_secret_file)?;
+        std::fs::read_to_string(&path)
+          .ok()
+          .map(|s| s.trim().to_owned())
+      })
       .ok_or_else(|| {
-        ConfigError::Validation("oidc_client_secret is required".to_owned())
+        ConfigError::Validation(
+          "oidc_client_secret or oidc_client_secret_file is required"
+            .to_owned(),
+        )
       })?;
 
     let base_url = cli.base_url.or(config_file.base_url).ok_or_else(|| {
@@ -308,7 +329,17 @@ impl Config {
 
     // ── webhook ───────────────────────────────────────────────────────────
 
-    let webhook_secret = cli.webhook_secret.or(config_file.webhook_secret);
+    let webhook_secret = cli
+      .webhook_secret
+      .or(config_file.webhook_secret)
+      .or_else(|| {
+        let path = cli
+          .webhook_secret_file
+          .or(config_file.webhook_secret_file)?;
+        std::fs::read_to_string(&path)
+          .ok()
+          .map(|s| s.trim().to_owned())
+      });
 
     Ok(Config {
       log_level,
