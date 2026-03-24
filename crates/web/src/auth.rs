@@ -16,7 +16,8 @@ use axum::{
 };
 use openidconnect::{
   core::{CoreAuthenticationFlow, CoreUserInfoClaims},
-  AuthorizationCode, CsrfToken, Nonce, Scope, TokenResponse,
+  AuthorizationCode, CsrfToken, Nonce, OAuth2TokenResponse, Scope,
+  TokenResponse,
 };
 use serde::{Deserialize, Serialize};
 use tower_sessions::Session;
