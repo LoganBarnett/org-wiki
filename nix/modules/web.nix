@@ -258,6 +258,10 @@ in {
           OIDC_CLIENT_ID = cfg.oidcClientId;
           OIDC_CLIENT_SECRET_FILE = "/run/credentials/org-wiki-web.service/oidc-client-secret";
           BASE_URL = cfg.baseUrl;
+          # The Nix-compiled OpenSSL has no CA bundle in its OPENSSLDIR, so
+          # point it at the NixOS system bundle which includes any custom CAs
+          # (e.g. private PKI roots added via security.pki.certificateFiles).
+          SSL_CERT_FILE = "/etc/ssl/certs/ca-certificates.crt";
         }
         // lib.optionalAttrs (cfg.contentRemote != null) {
           CONTENT_REMOTE = cfg.contentRemote;
