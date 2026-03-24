@@ -74,6 +74,13 @@ openidconnect = { version = "3", features = ["reqwest"] }
 # HTTP client — OIDC token exchange, discovery
 reqwest = { version = "0.12", features = ["json"] }
 
+# openidconnect uses reqwest 0.11 (via oauth2) with rustls-tls, which only
+# trusts the webpki/Mozilla CA bundle.  Adding rustls-tls-native-roots here
+# causes Cargo to enable that feature on the reqwest 0.11 in the dep graph,
+# which makes rustls also load the system CA bundle (including internal CAs
+# added via security.pki.certificateFiles on NixOS).
+reqwest011-native-roots = { package = "reqwest", version = "0.11", features = ["rustls-tls-native-roots"] }
+
 # Session management
 tower-sessions = { version = "0.14", features = ["memory-store"] }
 
