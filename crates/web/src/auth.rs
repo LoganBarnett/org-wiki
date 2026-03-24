@@ -15,8 +15,8 @@ use axum::{
   response::{IntoResponse, Redirect, Response},
 };
 use openidconnect::{
-  core::CoreAuthenticationFlow, AuthorizationCode, CsrfToken, Nonce, Scope,
-  TokenResponse,
+  core::{CoreAuthenticationFlow, CoreUserInfoClaims},
+  AuthorizationCode, CsrfToken, Nonce, Scope, TokenResponse,
 };
 use serde::{Deserialize, Serialize};
 use tower_sessions::Session;
@@ -170,21 +170,56 @@ pub async fn callback_handler(
       }
     };
 
-  // 4. Extract name and email from standard claims.
-  let email = match claims.email() {
+  // 4. Fetch user attributes from the userinfo endpoint.
+  // Authelia places email and name in the userinfo response rather than
+  // embedding them in the ID token, so we always query the endpoint after
+  // token verification.  ID token claims are kept as a fallback.
+  let userinfo: CoreUserInfoClaims = {
+    let req = match state
+      .oidc_client
+      .user_info(token_response.access_token().clone(), None)
+    {
+      Ok(r) => r,
+      Err(e) => {
+        warn!("Could not build userinfo request: {e}");
+        return (
+          StatusCode::BAD_GATEWAY,
+          "Authentication failed — no userinfo endpoint.",
+        )
+          .into_response();
+      }
+    };
+    match req
+      .request_async(openidconnect::reqwest::async_http_client)
+      .await
+    {
+      Ok(u) => u,
+      Err(e) => {
+        warn!("Userinfo request failed: {e}");
+        return (
+          StatusCode::BAD_GATEWAY,
+          "Authentication failed — could not fetch user info.",
+        )
+          .into_response();
+      }
+    }
+  };
+
+  let email = match userinfo.email().or_else(|| claims.email()) {
     Some(e) => e.to_string(),
     None => {
-      warn!("ID token missing email claim");
+      warn!("No email in userinfo or ID token");
       return (
         StatusCode::BAD_GATEWAY,
-        "Authentication failed — no email in token.",
+        "Authentication failed — no email found.",
       )
         .into_response();
     }
   };
 
-  let name = claims
+  let name = userinfo
     .name()
+    .or_else(|| claims.name())
     .and_then(|n| n.get(None))
     .map(|n| n.as_str().to_owned())
     .unwrap_or_else(|| email.clone());
