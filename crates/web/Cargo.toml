@@ -36,6 +36,10 @@ schemars = { workspace = true }
 sd-notify = { workspace = true }
 openidconnect = { workspace = true }
 reqwest = { workspace = true }
+# Force rustls-tls-native-roots on reqwest 0.11, which oauth2/openidconnect
+# use for OIDC discovery.  Without this, rustls only trusts the webpki
+# (Mozilla) CA bundle and rejects certificates signed by internal CAs.
+reqwest011-native-roots = { workspace = true }
 tower-sessions = { workspace = true }
 uuid = { workspace = true }
 time = { workspace = true }
