@@ -3,7 +3,12 @@
   --color-bg: #ffffff;
   --color-surface: #f0f0f0;
   --color-text: #111111;
+  --color-text-muted: #555555;
   --color-link: #0055cc;
+  --color-border: #dddddd;
+  --color-bg-error: #fff0f0;
+  --color-border-error: #ee8888;
+  --color-error: #cc0000;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -11,7 +16,12 @@
     --color-bg: #111111;
     --color-surface: #1e1e1e;
     --color-text: #eeeeee;
+    --color-text-muted: #888888;
     --color-link: #77aaff;
+    --color-border: #444444;
+    --color-bg-error: #2a0808;
+    --color-border-error: #aa4444;
+    --color-error: #ff6666;
   }
 }
 

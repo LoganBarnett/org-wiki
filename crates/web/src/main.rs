@@ -31,7 +31,7 @@ use logging::init_logging;
 use thiserror::Error;
 use tokio::signal;
 use tower_http::trace::TraceLayer;
-use tower_sessions::{MemoryStore, SessionManagerLayer};
+use tower_sessions::{cookie::SameSite, MemoryStore, SessionManagerLayer};
 use tracing::{error, info};
 
 #[derive(Debug, Error)]
@@ -108,7 +108,12 @@ async fn main() -> Result<(), ApplicationError> {
 fn create_app(state: AppState) -> Router {
   // Session middleware (in-memory store; swap for a persistent store later).
   let session_store = MemoryStore::default();
-  let session_layer = SessionManagerLayer::new(session_store).with_secure(true);
+  // SameSite::Lax is required for OIDC: the provider redirects back via a
+  // cross-site GET, and SameSite::Strict (the default) suppresses cookies on
+  // cross-site navigations, causing the state/nonce lookup to fail.
+  let session_layer = SessionManagerLayer::new(session_store)
+    .with_secure(true)
+    .with_same_site(SameSite::Lax);
 
   // Protected routes: inject state first so the router is Router<()>,
   // then wrap with the auth middleware (which itself is stateless).
