@@ -123,13 +123,6 @@ in {
       description = "Git remote name to push to after each save.  Null to disable push.";
     };
 
-    pandocBin = lib.mkOption {
-      type = lib.types.package;
-      default = pkgs.pandoc;
-      defaultText = lib.literalExpression "pkgs.pandoc";
-      description = "Package providing the pandoc binary.";
-    };
-
     cacheDir = lib.mkOption {
       type = lib.types.nullOr lib.types.str;
       default = null;
@@ -243,8 +236,8 @@ in {
       requires =
         lib.optional (cfg.socket != null) "org-wiki-web.socket";
 
-      # git must be on PATH for commit and push operations.
-      path = [pkgs.git];
+      # git and pandoc must be on PATH for commit/push and rendering.
+      path = [pkgs.git pkgs.pandoc];
 
       environment =
         {
@@ -256,7 +249,7 @@ in {
             else "${cfg.host}:${toString cfg.port}";
           FRONTEND_PATH = cfg.frontendPath;
           CONTENT_REPO = cfg.contentRepo;
-          PANDOC_BIN = "${cfg.pandocBin}/bin/pandoc";
+          PANDOC_BIN = "pandoc";
           TEMPLATE_DIR = cfg.templateDir;
           SITE_TITLE = cfg.siteTitle;
           COMMIT_AUTHOR_NAME = cfg.commitAuthorName;
