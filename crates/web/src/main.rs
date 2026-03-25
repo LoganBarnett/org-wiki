@@ -1,17 +1,17 @@
 //! org-wiki-web — wiki web server
 //!
 //! Route layout:
-//!   GET  /                  → redirect to /index.org
-//!   GET  /*path             → render wiki page (unauthenticated)
-//!   GET  /edit/*path        → edit form          (requires auth)
+//!   GET  /api/page/*path    → page title + rendered HTML + raw org (JSON)
+//!   GET  /api/me            → authenticated user (JSON), 401 if not logged in
 //!   POST /api/preview       → org → HTML fragment (requires auth)
 //!   POST /api/save/*path    → commit + push       (requires auth)
 //!   POST /webhook           → git push event      (HMAC-verified)
-//!   GET  /auth/login        → initiate OIDC flow
+//!   GET  /auth/login        → initiate OIDC flow  (?next= supported)
 //!   GET  /auth/callback     → OIDC callback
 //!   GET  /auth/logout       → clear session
 //!   GET  /healthz           → health check
 //!   GET  /metrics           → Prometheus metrics
+//!   *                       → Elm SPA (index.html fallback)
 
 mod auth;
 mod logging;
@@ -118,11 +118,16 @@ fn create_app(state: AppState) -> Router {
   // Protected routes: inject state first so the router is Router<()>,
   // then wrap with the auth middleware (which itself is stateless).
   let protected = Router::new()
-    .route("/edit/{*path}", get(routes::pages::edit_handler))
     .route("/api/preview", post(routes::api::preview_handler))
     .route("/api/save/{*path}", post(routes::api::save_handler))
     .with_state(state.clone())
     .layer(middleware::from_fn(auth::require_auth));
+
+  // Public API routes (no auth required; /api/me returns 401 if unauthed).
+  let api_routes = Router::new()
+    .route("/api/page/{*path}", get(routes::api::page_handler))
+    .route("/api/me", get(routes::api::me_handler))
+    .with_state(state.clone());
 
   // Auth routes.
   let auth_routes = Router::new()
@@ -136,19 +141,15 @@ fn create_app(state: AppState) -> Router {
     .route("/webhook", post(routes::webhook::webhook_handler))
     .with_state(state.clone());
 
-  // Public wiki page routes (unauthenticated reads).
-  let wiki_routes = Router::new()
-    .route("/", get(routes::pages::index_handler))
-    .route("/{*path}", get(routes::pages::page_handler))
-    .with_state(state.clone());
-
   // All subrouters are now Router<()> — merge into base and apply outer layers.
+  // The ServeDir fallback in base_router serves index.html for all other paths,
+  // handing them to the Elm SPA.
   Router::new()
     .merge(web_base::base_router(state))
     .merge(protected)
+    .merge(api_routes)
     .merge(auth_routes)
     .merge(webhook_route)
-    .merge(wiki_routes)
     .layer(session_layer)
     .layer(TraceLayer::new_for_http())
 }

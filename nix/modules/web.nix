@@ -129,15 +129,6 @@ in {
       description = "Directory for cached HTML fragments.  Null to disable caching.";
     };
 
-    templateDir = lib.mkOption {
-      type = lib.types.str;
-      default = "${cfg.package}/share/org-wiki-web/templates";
-      defaultText =
-        lib.literalExpression
-        ''"''${cfg.package}/share/org-wiki-web/templates"'';
-      description = "Directory containing Tera HTML templates.";
-    };
-
     siteTitle = lib.mkOption {
       type = lib.types.str;
       default = "Org Wiki";

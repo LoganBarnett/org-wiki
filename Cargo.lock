@@ -1950,7 +1950,6 @@ dependencies = [
  "sha2",
  "tap",
  "tempfile",
- "tera",
  "thiserror 2.0.18",
  "time",
  "tokio",

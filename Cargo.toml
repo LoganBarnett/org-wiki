@@ -66,9 +66,6 @@ git2 = "0.20"
 # 0.10 is in alpha; no stable release yet.
 orgize = "0.10.0-alpha.10"
 
-# HTML templating (Jinja2-like)
-tera = "1"
-
 # OIDC / OAuth2 authentication
 openidconnect = { version = "3", features = ["reqwest"] }
 

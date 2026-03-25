@@ -1,7 +1,9 @@
 //! JSON API endpoints.
 //!
-//! `POST /api/preview`  — render org-mode text to an HTML fragment.
-//! `POST /api/save/*path` — write, commit, and optionally push a page.
+//! `GET  /api/page/*path`  — fetch a wiki page (title, rendered HTML, raw source).
+//! `GET  /api/me`          — return the authenticated user, or 401.
+//! `POST /api/preview`     — render org-mode text to an HTML fragment.
+//! `POST /api/save/*path`  — write, commit, and optionally push a page.
 
 use axum::{
   extract::{Path, State},
@@ -9,12 +11,124 @@ use axum::{
   response::{IntoResponse, Response},
   Json,
 };
-use org_wiki_lib::{CommitAuthor, CommitMessage};
+use org_wiki_lib::{CommitAuthor, CommitMessage, PageMeta};
 use serde::{Deserialize, Serialize};
 use tower_sessions::Session;
 use tracing::error;
 
 use crate::{auth, web_base::AppState};
+
+// ── page ──────────────────────────────────────────────────────────────────────
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PageResponse {
+  pub title: String,
+  pub html: String,
+  pub raw_org: String,
+  pub page_path: String,
+  pub exists: bool,
+}
+
+/// `GET /api/page/*path` — fetch a wiki page as JSON.
+///
+/// Returns the rendered HTML, raw org source, and metadata for a page.
+/// `exists: false` is returned (with empty fields) when the page is not found,
+/// so the client can show a "create this page" prompt without a 404.
+pub async fn page_handler(
+  State(state): State<AppState>,
+  Path(page_path): Path<String>,
+) -> Response {
+  let rel_path = normalize_page_path(&page_path);
+  let page_key = rel_path.to_string_lossy().into_owned();
+
+  let repo = state.wiki_repo.clone();
+  let pandoc_bin = state.pandoc_bin.clone();
+  let cache = state.cache.clone();
+
+  let result = tokio::task::spawn_blocking(move || {
+    let source = match repo.read_page(&rel_path) {
+      Ok(s) => s,
+      Err(_) => return Ok::<Option<_>, String>(None),
+    };
+
+    let meta = PageMeta::parse(&source);
+    let file_stem = rel_path
+      .file_stem()
+      .map(|s| s.to_string_lossy().into_owned())
+      .unwrap_or_else(|| page_key.clone());
+    let title = meta.display_title(&file_stem).to_owned();
+
+    // Use cached HTML if available; otherwise render and cache.
+    let html = match cache.get(&page_key) {
+      Ok(Some(cached)) => cached,
+      _ => {
+        let rendered = org_wiki_lib::export_to_html(&source, &pandoc_bin)
+          .map_err(|e| e.to_string())?;
+        cache.set(&page_key, &rendered).ok();
+        rendered
+      }
+    };
+
+    Ok(Some((title, html, source, page_key)))
+  })
+  .await;
+
+  match result {
+    Ok(Ok(Some((title, html, raw_org, page_path)))) => Json(PageResponse {
+      title,
+      html,
+      raw_org,
+      page_path,
+      exists: true,
+    })
+    .into_response(),
+    Ok(Ok(None)) => {
+      // Page not found — return a placeholder so the client can offer
+      // to create it rather than treating it as an error.
+      Json(PageResponse {
+        title: String::new(),
+        html: String::new(),
+        raw_org: String::new(),
+        page_path: normalize_page_path(&page_path)
+          .to_string_lossy()
+          .into_owned(),
+        exists: false,
+      })
+      .into_response()
+    }
+    Ok(Err(e)) => {
+      error!("Page render failed for {page_path}: {e}");
+      StatusCode::INTERNAL_SERVER_ERROR.into_response()
+    }
+    Err(e) => {
+      error!("spawn_blocking panicked: {e}");
+      StatusCode::INTERNAL_SERVER_ERROR.into_response()
+    }
+  }
+}
+
+// ── me ────────────────────────────────────────────────────────────────────────
+
+#[derive(Debug, Serialize)]
+pub struct MeResponse {
+  pub name: String,
+  pub email: String,
+}
+
+/// `GET /api/me` — return the authenticated user's name and email.
+///
+/// Returns 401 if the session contains no authenticated user.
+pub async fn me_handler(session: Session) -> Response {
+  match auth::current_user(&session).await {
+    Some(user) => Json(MeResponse {
+      name: user.name,
+      email: user.email,
+    })
+    .into_response(),
+    None => StatusCode::UNAUTHORIZED.into_response(),
+  }
+}
 
 // ── preview ───────────────────────────────────────────────────────────────────
 

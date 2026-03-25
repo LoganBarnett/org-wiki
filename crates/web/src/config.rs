@@ -74,10 +74,6 @@ pub struct CliRaw {
   #[arg(long, env = "CACHE_DIR")]
   pub cache_dir: Option<PathBuf>,
 
-  /// Directory containing Tera HTML templates
-  #[arg(long, env = "TEMPLATE_DIR")]
-  pub template_dir: Option<PathBuf>,
-
   /// Human-readable site name shown in the HTML header
   #[arg(long, env = "SITE_TITLE")]
   pub site_title: Option<String>,
@@ -134,7 +130,6 @@ pub struct ConfigFileRaw {
   pub content_remote: Option<String>,
   pub pandoc_bin: Option<PathBuf>,
   pub cache_dir: Option<PathBuf>,
-  pub template_dir: Option<PathBuf>,
   pub site_title: Option<String>,
   // git identity
   pub commit_author_name: Option<String>,
@@ -181,7 +176,6 @@ pub struct Config {
   pub content_remote: Option<String>,
   pub pandoc_bin: PathBuf,
   pub cache_dir: Option<PathBuf>,
-  pub template_dir: PathBuf,
   pub site_title: String,
   // git identity
   pub commit_author_name: String,
@@ -269,11 +263,6 @@ impl Config {
 
     let cache_dir = cli.cache_dir.or(config_file.cache_dir);
 
-    let template_dir = cli
-      .template_dir
-      .or(config_file.template_dir)
-      .unwrap_or_else(|| PathBuf::from("templates"));
-
     let site_title = cli
       .site_title
       .or(config_file.site_title)
@@ -350,7 +339,6 @@ impl Config {
       content_remote,
       pandoc_bin,
       cache_dir,
-      template_dir,
       site_title,
       commit_author_name,
       commit_author_email,

@@ -53,11 +53,30 @@ pub struct CallbackQuery {
 
 // ── handlers ──────────────────────────────────────────────────────────────────
 
+#[derive(Debug, Deserialize)]
+pub struct LoginQuery {
+  /// Relative path to return to after successful authentication.
+  next: Option<String>,
+}
+
 /// `GET /auth/login` — redirect the user to the OIDC provider.
+///
+/// Accepts an optional `?next=<path>` query parameter.  When present and a
+/// valid relative path, it is stored in the session as `return_to` so the
+/// callback handler can redirect back after authentication.
 pub async fn login_handler(
   State(state): State<AppState>,
   session: Session,
+  Query(params): Query<LoginQuery>,
 ) -> Response {
+  // Store client-supplied return destination.  Validate as a relative path
+  // to prevent open-redirect attacks.
+  if let Some(next) = params
+    .next
+    .filter(|n| n.starts_with('/') && !n.starts_with("//"))
+  {
+    session.insert(KEY_RETURN_TO, next).await.ok();
+  }
   let (auth_url, csrf_token, nonce) = state
     .oidc_client
     .authorize_url(

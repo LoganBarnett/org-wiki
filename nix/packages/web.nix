@@ -2,8 +2,8 @@
 # Called from flake.nix with: import ./web.nix { inherit craneLib commonArgs pkgs; }
 #
 # The package output includes:
-#   $out/bin/org-wiki-web              — the server binary
-#   $out/share/org-wiki-web/frontend/  — compiled Elm frontend assets
+#   $out/bin/org-wiki-web             — the server binary
+#   $out/share/org-wiki-web/frontend/ — compiled Elm frontend assets
 #
 # The NixOS module passes --frontend-path pointing at the share directory.
 #
@@ -61,6 +61,5 @@ in
     postBuild = ''
       mkdir -p $out/share/org-wiki-web
       ln -s ${elmFrontend} $out/share/org-wiki-web/frontend
-      ln -s ${../../templates} $out/share/org-wiki-web/templates
     '';
   }

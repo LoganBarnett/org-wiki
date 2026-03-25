@@ -17,7 +17,6 @@ use prometheus::{Encoder, IntCounter, Registry, TextEncoder};
 use schemars::JsonSchema;
 use serde::Serialize;
 use serde_json::json;
-use tera::Tera;
 use thiserror::Error;
 use tower::ServiceBuilder;
 use tower_http::{
@@ -44,8 +43,6 @@ pub struct AppState {
   pub site_title: String,
   pub commit_author_name: String,
   pub commit_author_email: String,
-  // Templates
-  pub tera: Arc<Tera>,
   // Auth
   pub oidc_client: Arc<CoreClient>,
   // Webhook
@@ -56,13 +53,6 @@ pub struct AppState {
 pub enum AppStateError {
   #[error("Failed to open wiki repository: {0}")]
   WikiRepo(#[from] org_wiki_lib::GitError),
-
-  #[error("Failed to load Tera templates from {path:?}: {source}")]
-  Templates {
-    path: PathBuf,
-    #[source]
-    source: tera::Error,
-  },
 
   #[error("Invalid OIDC issuer URL: {0}")]
   InvalidIssuer(String),
@@ -97,15 +87,6 @@ impl AppState {
       Some(dir) => Cache::new(dir.clone()),
       None => Cache::disabled(),
     };
-
-    // ── Tera templates ────────────────────────────────────────────────────
-    let template_glob = format!("{}/**/*.html", config.template_dir.display());
-    let tera =
-      Tera::new(&template_glob).map_err(|source| AppStateError::Templates {
-        path: config.template_dir.clone(),
-        source,
-      })?;
-    info!(glob = %template_glob, "loaded Tera templates");
 
     // ── OIDC client ───────────────────────────────────────────────────────
     let issuer = openidconnect::IssuerUrl::new(config.oidc_issuer.clone())
@@ -148,7 +129,6 @@ impl AppState {
       site_title: config.site_title.clone(),
       commit_author_name: config.commit_author_name.clone(),
       commit_author_email: config.commit_author_email.clone(),
-      tera: Arc::new(tera),
       oidc_client: Arc::new(oidc_client),
       webhook_secret: config.webhook_secret.clone(),
     })
@@ -165,7 +145,6 @@ impl AppState {
       core::CoreJsonWebKeySet, AuthUrl, ClientId, IssuerUrl,
     };
     use prometheus::{IntCounter, Registry};
-    use tera::Tera;
 
     let registry = Registry::new();
     let request_counter =
@@ -200,7 +179,6 @@ impl AppState {
       site_title: "Test Wiki".to_string(),
       commit_author_name: "Test".to_string(),
       commit_author_email: "test@example.com".to_string(),
-      tera: Arc::new(Tera::default()),
       oidc_client: Arc::new(oidc_client),
       webhook_secret: None,
     }
