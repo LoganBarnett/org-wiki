@@ -288,6 +288,11 @@ in {
 
         StateDirectory = cfg.user;
 
+        # ProtectSystem = strict makes the entire filesystem read-only except
+        # for paths explicitly granted via StateDirectory, CacheDirectory, or
+        # ReadWritePaths.  Grant write access to the cache dir when configured.
+        ReadWritePaths = lib.optional (cfg.cacheDir != null) cfg.cacheDir;
+
         LoadCredential =
           ["oidc-client-secret:${cfg.oidcClientSecretFile}"]
           ++ lib.optional (cfg.webhookSecretFile != null)

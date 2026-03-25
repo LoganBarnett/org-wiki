@@ -212,8 +212,11 @@ impl WikiRepo {
       return Ok(());
     };
 
+    // Push HEAD explicitly so the current branch is pushed by name even when
+    // no upstream tracking ref has been configured yet (e.g. first push after
+    // a local git-init fallback).
     let status = Command::new("git")
-      .args(["push", remote])
+      .args(["push", remote, "HEAD"])
       .current_dir(&self.root)
       .stdout(Stdio::null())
       .stderr(Stdio::null())
