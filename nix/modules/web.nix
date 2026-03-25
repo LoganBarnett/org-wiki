@@ -227,8 +227,10 @@ in {
       requires =
         lib.optional (cfg.socket != null) "org-wiki-web.socket";
 
-      # git and pandoc must be on PATH for commit/push and rendering.
-      path = [pkgs.git pkgs.pandoc];
+      # git, openssh, and pandoc must be on PATH.  git is used for commits
+      # and pushes; openssh provides the ssh binary referenced by
+      # GIT_SSH_COMMAND; pandoc renders org-mode to HTML.
+      path = [pkgs.git pkgs.openssh pkgs.pandoc];
 
       environment =
         {
