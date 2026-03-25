@@ -188,16 +188,16 @@ impl WikiRepo {
     let sig = Signature::now(server_name, server_email)?;
     let full_message = build_message(message, co_author);
 
-    let parent = repo.head()?.peel_to_commit()?;
+    // On an unborn branch (freshly initialised repo) there is no parent commit.
+    let maybe_parent = match repo.head() {
+      Ok(head) => Some(head.peel_to_commit()?),
+      Err(e) if e.code() == git2::ErrorCode::UnbornBranch => None,
+      Err(e) => return Err(e.into()),
+    };
+    let parents: Vec<&git2::Commit> = maybe_parent.iter().collect();
 
-    let oid = repo.commit(
-      Some("HEAD"),
-      &sig,
-      &sig,
-      &full_message,
-      &tree,
-      &[&parent],
-    )?;
+    let oid =
+      repo.commit(Some("HEAD"), &sig, &sig, &full_message, &tree, &parents)?;
 
     debug!(%oid, "committed");
     Ok(oid)
