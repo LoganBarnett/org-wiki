@@ -241,7 +241,6 @@ in {
           FRONTEND_PATH = cfg.frontendPath;
           CONTENT_REPO = cfg.contentRepo;
           PANDOC_BIN = "pandoc";
-          TEMPLATE_DIR = cfg.templateDir;
           SITE_TITLE = cfg.siteTitle;
           COMMIT_AUTHOR_NAME = cfg.commitAuthorName;
           COMMIT_AUTHOR_EMAIL = cfg.commitAuthorEmail;
