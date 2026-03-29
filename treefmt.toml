@@ -20,3 +20,7 @@ includes = ["*.elm"]
 command = "prettier"
 options = ["--write"]
 includes = ["*.css"]
+
+[formatter.org-fmt]
+command = "org-fmt"
+includes = ["*.org"]
