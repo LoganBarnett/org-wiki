@@ -111,6 +111,16 @@ in {
 
     # ── wiki content ──────────────────────────────────────────────────────
 
+    orgFmtPackage = lib.mkOption {
+      type = lib.types.nullOr lib.types.package;
+      default = null;
+      description = ''
+        Package providing the org-fmt binary.  When set, org-fmt is added
+        to the service PATH and post-save formatting is enabled.  Set to
+        null to disable formatting.
+      '';
+    };
+
     contentRepo = lib.mkOption {
       type = lib.types.str;
       default = "/var/lib/org-wiki-web/content";
@@ -230,7 +240,9 @@ in {
       # git, openssh, and pandoc must be on PATH.  git is used for commits
       # and pushes; openssh provides the ssh binary referenced by
       # GIT_SSH_COMMAND; pandoc renders org-mode to HTML.
-      path = [pkgs.git pkgs.openssh pkgs.pandoc];
+      path =
+        [pkgs.git pkgs.openssh pkgs.pandoc]
+        ++ lib.optional (cfg.orgFmtPackage != null) cfg.orgFmtPackage;
 
       environment =
         {
@@ -250,6 +262,9 @@ in {
           OIDC_CLIENT_ID = cfg.oidcClientId;
           OIDC_CLIENT_SECRET_FILE = "/run/credentials/org-wiki-web.service/oidc-client-secret";
           BASE_URL = cfg.baseUrl;
+        }
+        // lib.optionalAttrs (cfg.orgFmtPackage != null) {
+          ORG_FMT_BIN = "org-fmt";
         }
         // lib.optionalAttrs (cfg.contentRemote != null) {
           CONTENT_REMOTE = cfg.contentRemote;

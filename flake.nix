@@ -6,6 +6,7 @@
     nixpkgs.url = "github:NixOS/nixpkgs/25.11";
     rust-overlay.url = "github:oxalica/rust-overlay";
     crane.url = "github:ipetkov/crane";
+    org-fmt.url = "github:LoganBarnett/org-fmt";
   };
 
   outputs = {
@@ -13,6 +14,7 @@
     nixpkgs,
     rust-overlay,
     crane,
+    org-fmt,
   } @ inputs: let
     forAllSystems = nixpkgs.lib.genAttrs nixpkgs.lib.systems.flakeExposed;
     overlays = [
@@ -39,7 +41,6 @@
     # 3. The package and app generation will automatically update
     # ============================================================================
     workspaceCrates = {
-
       # CRATE:web:begin
       # Web service
       web = {
@@ -71,6 +72,7 @@
       pkgs.openssl
       pkgs.libgit2
       pkgs.pandoc
+      org-fmt.packages.${pkgs.stdenv.hostPlatform.system}.default
       pkgs.jq
       # Elm toolchain
       pkgs.elmPackages.elm

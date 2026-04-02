@@ -79,8 +79,11 @@ impl AppState {
       .expect("Failed to register counter");
 
     // ── wiki repo ─────────────────────────────────────────────────────────
-    let wiki_repo =
-      WikiRepo::open(&config.content_repo, config.content_remote.clone())?;
+    let wiki_repo = WikiRepo::open(
+      &config.content_repo,
+      config.content_remote.clone(),
+      config.org_fmt_bin.clone(),
+    )?;
     info!(path = ?config.content_repo, "opened wiki repository");
 
     let cache = match &config.cache_dir {
@@ -157,7 +160,8 @@ impl AppState {
     // The dir is intentionally leaked (into_path) — acceptable in tests.
     let repo_dir = tempfile::TempDir::new().unwrap().keep();
     git2::Repository::init(&repo_dir).unwrap();
-    let wiki_repo = org_wiki_lib::WikiRepo::open(&repo_dir, None).unwrap();
+    let wiki_repo =
+      org_wiki_lib::WikiRepo::open(&repo_dir, None, None).unwrap();
 
     let oidc_client = openidconnect::core::CoreClient::new(
       ClientId::new("test".to_string()),
