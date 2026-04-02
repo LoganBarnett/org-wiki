@@ -56,7 +56,6 @@ crates/
   lib/    — core logic: git ops, pandoc export, HTML cache, page metadata
   web/    — Axum web server: routes, OIDC auth, session management
 frontend/ — Elm UI (editor, preview tab, commit form)
-templates/  — Tera HTML templates (page shell, edit view)
 #+end_src
 
 * Development

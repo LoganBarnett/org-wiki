@@ -31,6 +31,13 @@ pub enum ConfigError {
     address: String,
     reason: &'static str,
   },
+
+  #[error("Failed to read secret file at {path:?}: {source}")]
+  SecretFileRead {
+    path: PathBuf,
+    #[source]
+    source: std::io::Error,
+  },
 }
 
 #[derive(Debug, Parser)]
@@ -69,6 +76,10 @@ pub struct CliRaw {
   /// Path to the Pandoc binary
   #[arg(long, env = "PANDOC_BIN")]
   pub pandoc_bin: Option<PathBuf>,
+
+  /// Path to the org-fmt binary (omit to disable post-save formatting)
+  #[arg(long, env = "ORG_FMT_BIN")]
+  pub org_fmt_bin: Option<PathBuf>,
 
   /// Directory for cached HTML fragments (omit to disable caching)
   #[arg(long, env = "CACHE_DIR")]
@@ -129,6 +140,7 @@ pub struct ConfigFileRaw {
   pub content_repo: Option<PathBuf>,
   pub content_remote: Option<String>,
   pub pandoc_bin: Option<PathBuf>,
+  pub org_fmt_bin: Option<PathBuf>,
   pub cache_dir: Option<PathBuf>,
   pub site_title: Option<String>,
   // git identity
@@ -175,6 +187,7 @@ pub struct Config {
   pub content_repo: PathBuf,
   pub content_remote: Option<String>,
   pub pandoc_bin: PathBuf,
+  pub org_fmt_bin: Option<PathBuf>,
   pub cache_dir: Option<PathBuf>,
   pub site_title: String,
   // git identity
@@ -261,6 +274,14 @@ impl Config {
       .or(config_file.pandoc_bin)
       .unwrap_or_else(|| PathBuf::from("pandoc"));
 
+    // Default to "org-fmt" on PATH so formatting is enabled out of the box.
+    // Callers that want to disable formatting must set org_fmt_bin to None
+    // explicitly; there is no config-file mechanism to clear a default.
+    let org_fmt_bin = cli
+      .org_fmt_bin
+      .or(config_file.org_fmt_bin)
+      .or_else(|| Some(PathBuf::from("org-fmt")));
+
     let cache_dir = cli.cache_dir.or(config_file.cache_dir);
 
     let site_title = cli
@@ -294,17 +315,22 @@ impl Config {
         ConfigError::Validation("oidc_client_id is required".to_owned())
       })?;
 
+    let secret_file_path = cli
+      .oidc_client_secret_file
+      .or(config_file.oidc_client_secret_file);
+
     let oidc_client_secret = cli
       .oidc_client_secret
       .or(config_file.oidc_client_secret)
+      .map(Ok)
       .or_else(|| {
-        let path = cli
-          .oidc_client_secret_file
-          .or(config_file.oidc_client_secret_file)?;
-        std::fs::read_to_string(&path)
-          .ok()
-          .map(|s| s.trim().to_owned())
+        secret_file_path.map(|path| {
+          std::fs::read_to_string(&path)
+            .map(|s| s.trim().to_owned())
+            .map_err(|source| ConfigError::SecretFileRead { path, source })
+        })
       })
+      .transpose()?
       .ok_or_else(|| {
         ConfigError::Validation(
           "oidc_client_secret or oidc_client_secret_file is required"
@@ -318,17 +344,21 @@ impl Config {
 
     // ── webhook ───────────────────────────────────────────────────────────
 
+    let webhook_secret_file_path =
+      cli.webhook_secret_file.or(config_file.webhook_secret_file);
+
     let webhook_secret = cli
       .webhook_secret
       .or(config_file.webhook_secret)
+      .map(Ok)
       .or_else(|| {
-        let path = cli
-          .webhook_secret_file
-          .or(config_file.webhook_secret_file)?;
-        std::fs::read_to_string(&path)
-          .ok()
-          .map(|s| s.trim().to_owned())
-      });
+        webhook_secret_file_path.map(|path| {
+          std::fs::read_to_string(&path)
+            .map(|s| s.trim().to_owned())
+            .map_err(|source| ConfigError::SecretFileRead { path, source })
+        })
+      })
+      .transpose()?;
 
     Ok(Config {
       log_level,
@@ -338,6 +368,7 @@ impl Config {
       content_repo,
       content_remote,
       pandoc_bin,
+      org_fmt_bin,
       cache_dir,
       site_title,
       commit_author_name,

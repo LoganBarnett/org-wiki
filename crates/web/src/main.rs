@@ -22,7 +22,9 @@ use org_wiki_web::config::{CliRaw, Config, ConfigError};
 use org_wiki_web::web_base::{self, AppState, AppStateError};
 
 use axum::{
-  middleware,
+  extract::State,
+  http::Request,
+  middleware::{self, Next},
   routing::{get, post},
   Router,
 };
@@ -145,13 +147,23 @@ fn create_app(state: AppState) -> Router {
   // The ServeDir fallback in base_router serves index.html for all other paths,
   // handing them to the Elm SPA.
   Router::new()
-    .merge(web_base::base_router(state))
+    .merge(web_base::base_router(state.clone()))
     .merge(protected)
     .merge(api_routes)
     .merge(auth_routes)
     .merge(webhook_route)
     .layer(session_layer)
     .layer(TraceLayer::new_for_http())
+    .layer(middleware::from_fn_with_state(state, count_requests))
+}
+
+async fn count_requests(
+  State(state): State<AppState>,
+  req: Request<axum::body::Body>,
+  next: Next,
+) -> axum::response::Response {
+  state.request_counter.inc();
+  next.run(req).await
 }
 
 async fn shutdown_signal() {

@@ -20,9 +20,6 @@ log_format = "text"  # text, json
 # Git remote name to push to after each save (leave blank to skip push).
 # content_remote = "origin"
 
-# Path under content_repo where org files live.  Defaults to the repo root.
-# content_root = ""
-
 # ── HTML export and caching ─────────────────────────────────────────────────
 
 # Path to the Pandoc binary (defaults to "pandoc" on $PATH).
@@ -31,11 +28,6 @@ log_format = "text"  # text, json
 # Directory where rendered HTML fragments are cached.  Set to "" to disable
 # on-disk caching (render on every request — fine for low-traffic instances).
 # cache_dir = "/var/cache/org-wiki"
-
-# ── Site templates ───────────────────────────────────────────────────────────
-
-# Directory containing Tera HTML templates (page.html, edit.html, etc.).
-# template_dir = "templates"
 
 # Human-readable name shown in the site header.
 # site_title = "Org Wiki"
@@ -58,6 +50,12 @@ log_format = "text"  # text, json
 # User identity is recorded via a Co-authored-by trailer.
 # commit_author_name = "Org Wiki"
 # commit_author_email = "wiki@example.com"
+
+# ── Org formatter ────────────────────────────────────────────────────────────
+
+# Path to the org-fmt binary (defaults to "org-fmt" on $PATH).
+# Set to an empty string or omit ORG_FMT_BIN to disable post-save formatting.
+# org_fmt_bin = "org-fmt"
 
 # ── Webhooks ─────────────────────────────────────────────────────────────────
 

@@ -52,14 +52,21 @@ pub enum GitError {
   #[error("Failed to spawn git subprocess: {0}")]
   ProcessSpawn(#[source] std::io::Error),
 
-  #[error("git push to remote {remote:?} failed")]
-  PushFailed { remote: String },
+  #[error("git push to remote {remote:?} failed: {stderr}")]
+  PushFailed { remote: String, stderr: String },
 
-  #[error("git pull from remote {remote:?} failed")]
-  PullFailed { remote: String },
+  #[error("git pull from remote {remote:?} failed: {stderr}")]
+  PullFailed { remote: String, stderr: String },
 
   #[error("Internal error: git mutex poisoned")]
   MutexPoisoned,
+
+  #[error("Failed to spawn org-fmt at {path:?}: {source}")]
+  OrgFmtSpawn {
+    path: PathBuf,
+    #[source]
+    source: std::io::Error,
+  },
 }
 
 /// User whose edit is attributed via a `Co-authored-by:` commit trailer.
@@ -96,12 +103,18 @@ pub struct WikiRepo {
   /// Remote name to push to after commits (e.g. `"origin"`).
   /// `None` disables push entirely.
   remote: Option<String>,
+  /// Path to the org-fmt binary.  `None` disables post-save formatting.
+  org_fmt_bin: Option<PathBuf>,
   inner: Arc<Mutex<Repository>>,
 }
 
 impl WikiRepo {
   /// Open an existing (non-bare) git repository at `root`.
-  pub fn open(root: &Path, remote: Option<String>) -> Result<Self, GitError> {
+  pub fn open(
+    root: &Path,
+    remote: Option<String>,
+    org_fmt_bin: Option<PathBuf>,
+  ) -> Result<Self, GitError> {
     let repo = Repository::open(root).map_err(|source| GitError::Open {
       path: root.to_owned(),
       source,
@@ -116,6 +129,7 @@ impl WikiRepo {
     Ok(Self {
       root: root.to_owned(),
       remote,
+      org_fmt_bin,
       inner: Arc::new(Mutex::new(repo)),
     })
   }
@@ -172,8 +186,25 @@ impl WikiRepo {
         }
       })?;
     }
-    std::fs::write(&abs, content)
-      .map_err(|source| GitError::WriteFile { path: abs, source })?;
+    std::fs::write(&abs, content).map_err(|source| GitError::WriteFile {
+      path: abs.clone(),
+      source,
+    })?;
+
+    // Run org-fmt if configured.  Spawn failure is a hard error; non-zero
+    // exit is a warning so a formatter bug never blocks a save.
+    if let Some(ref fmt) = self.org_fmt_bin {
+      let status = Command::new(fmt).arg(&abs).status().map_err(|source| {
+        GitError::OrgFmtSpawn {
+          path: fmt.clone(),
+          source,
+        }
+      })?;
+      if !status.success() {
+        tracing::warn!(?abs, code = ?status.code(),
+          "org-fmt exited non-zero; committing unformatted content");
+      }
+    }
 
     // 2. Stage the file and create a commit (mutex held for minimum duration).
     let repo = self.inner.lock().map_err(|_| GitError::MutexPoisoned)?;
@@ -215,19 +246,20 @@ impl WikiRepo {
     // Push HEAD explicitly so the current branch is pushed by name even when
     // no upstream tracking ref has been configured yet (e.g. first push after
     // a local git-init fallback).
-    let status = Command::new("git")
+    let output = Command::new("git")
       .args(["push", remote, "HEAD"])
       .current_dir(&self.root)
       .stdout(Stdio::null())
-      .stderr(Stdio::null())
-      .status()
+      .stderr(Stdio::piped())
+      .output()
       .map_err(GitError::ProcessSpawn)?;
 
-    if status.success() {
+    if output.status.success() {
       Ok(())
     } else {
       Err(GitError::PushFailed {
         remote: remote.clone(),
+        stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
       })
     }
   }
@@ -243,19 +275,20 @@ impl WikiRepo {
       return Ok(());
     };
 
-    let status = Command::new("git")
+    let output = Command::new("git")
       .args(["pull", "--ff-only", remote])
       .current_dir(&self.root)
       .stdout(Stdio::null())
-      .stderr(Stdio::null())
-      .status()
+      .stderr(Stdio::piped())
+      .output()
       .map_err(GitError::ProcessSpawn)?;
 
-    if status.success() {
+    if output.status.success() {
       Ok(())
     } else {
       Err(GitError::PullFailed {
         remote: remote.clone(),
+        stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
       })
     }
   }
@@ -368,7 +401,7 @@ mod tests {
       .output()
       .unwrap();
 
-    let repo = WikiRepo::open(path, None).unwrap();
+    let repo = WikiRepo::open(path, None, None).unwrap();
     (dir, repo)
   }
 

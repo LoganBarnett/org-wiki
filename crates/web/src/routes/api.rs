@@ -275,3 +275,51 @@ pub fn normalize_page_path(raw: &str) -> std::path::PathBuf {
 
   safe
 }
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use std::path::PathBuf;
+
+  #[test]
+  fn basic_path_gets_org_suffix() {
+    assert_eq!(normalize_page_path("foo"), PathBuf::from("foo.org"));
+  }
+
+  #[test]
+  fn path_with_org_suffix_unchanged() {
+    assert_eq!(normalize_page_path("foo.org"), PathBuf::from("foo.org"));
+  }
+
+  #[test]
+  fn leading_slashes_stripped() {
+    assert_eq!(normalize_page_path("/foo"), PathBuf::from("foo.org"));
+    assert_eq!(normalize_page_path("///foo"), PathBuf::from("foo.org"));
+  }
+
+  #[test]
+  fn nested_path() {
+    assert_eq!(normalize_page_path("a/b/c"), PathBuf::from("a/b/c.org"));
+  }
+
+  #[test]
+  fn traversal_components_stripped() {
+    assert_eq!(
+      normalize_page_path("../etc/passwd"),
+      PathBuf::from("etc/passwd.org")
+    );
+  }
+
+  #[test]
+  fn dot_components_stripped() {
+    assert_eq!(
+      normalize_page_path("./foo/../bar"),
+      PathBuf::from("foo/bar.org")
+    );
+  }
+
+  #[test]
+  fn empty_segments_collapsed() {
+    assert_eq!(normalize_page_path("a//b"), PathBuf::from("a/b.org"));
+  }
+}

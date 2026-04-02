@@ -110,6 +110,8 @@ pub async fn webhook_handler(
 
 // ── HMAC verification ─────────────────────────────────────────────────────────
 
+/// Verify that `signature_header` is a valid `sha256=<hex>` HMAC-SHA256 of
+/// `body` using the given `secret`.
 fn verify_signature(body: &[u8], signature_header: &str, secret: &str) -> bool {
   let hex_digest = match signature_header.strip_prefix("sha256=") {
     Some(h) => h,
@@ -131,4 +133,53 @@ fn verify_signature(body: &[u8], signature_header: &str, secret: &str) -> bool {
     .expect("HMAC accepts any key size");
   mac.update(body);
   mac.verify_slice(&expected).is_ok()
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  /// Compute the hex-encoded HMAC-SHA256 of `body` using `secret`.
+  fn hmac_hex(body: &[u8], secret: &str) -> String {
+    let mut mac = HmacSha256::new_from_slice(secret.as_bytes()).unwrap();
+    mac.update(body);
+    hex::encode(mac.finalize().into_bytes())
+  }
+
+  #[test]
+  fn valid_signature_passes() {
+    let body = b"hello world";
+    let secret = "test-secret";
+    let sig = format!("sha256={}", hmac_hex(body, secret));
+    assert!(verify_signature(body, &sig, secret));
+  }
+
+  #[test]
+  fn wrong_signature_fails() {
+    let body = b"hello world";
+    let secret = "test-secret";
+    let wrong_sig = format!("sha256={}", hmac_hex(b"wrong body", secret));
+    assert!(!verify_signature(body, &wrong_sig, secret));
+  }
+
+  #[test]
+  fn missing_sha256_prefix_fails() {
+    let body = b"hello world";
+    let secret = "test-secret";
+    let sig = hmac_hex(body, secret);
+    assert!(!verify_signature(body, &sig, secret));
+  }
+
+  #[test]
+  fn invalid_hex_fails() {
+    assert!(!verify_signature(b"body", "sha256=zzzz", "secret"));
+  }
+
+  #[test]
+  fn empty_body_with_correct_hmac_passes() {
+    let body = b"";
+    let secret = "test-secret";
+    let sig = format!("sha256={}", hmac_hex(body, secret));
+    assert!(verify_signature(body, &sig, secret));
+  }
 }
