@@ -274,13 +274,12 @@ impl Config {
       .or(config_file.pandoc_bin)
       .unwrap_or_else(|| PathBuf::from("pandoc"));
 
-    // Default to "org-fmt" on PATH so formatting is enabled out of the box.
-    // Callers that want to disable formatting must set org_fmt_bin to None
-    // explicitly; there is no config-file mechanism to clear a default.
+    // An empty string explicitly disables formatting; omitting the key
+    // also leaves formatting off so deployments without org-fmt work.
     let org_fmt_bin = cli
       .org_fmt_bin
       .or(config_file.org_fmt_bin)
-      .or_else(|| Some(PathBuf::from("org-fmt")));
+      .filter(|p| !p.as_os_str().is_empty());
 
     let cache_dir = cli.cache_dir.or(config_file.cache_dir);
 

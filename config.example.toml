@@ -53,8 +53,7 @@ log_format = "text"  # text, json
 
 # ── Org formatter ────────────────────────────────────────────────────────────
 
-# Path to the org-fmt binary (defaults to "org-fmt" on $PATH).
-# Set to an empty string or omit ORG_FMT_BIN to disable post-save formatting.
+# Path to the org-fmt binary.  Omit or set to "" to disable post-save formatting.
 # org_fmt_bin = "org-fmt"
 
 # ── Webhooks ─────────────────────────────────────────────────────────────────
