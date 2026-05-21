@@ -26,6 +26,31 @@ punctuation.
 Only comment non-obvious intent, invariants, tradeoffs, or historical
 constraints; no restating of control flow.
 
+** Org-mode content
+
+All reads from org-mode content go through the parser
+([[https://github.com/LoganBarnett/orgize][orgize]]).  Do not match
+strings, slice bytes, or apply regexes against org source to extract
+titles, headlines, links, tags, Babel blocks, or any other org
+construct.  Wiki pages are user input and the grammar is large; the
+parser is the only thing that gets it right.
+
+In practice this means:
+
+- Document metadata (~#+title:~, ~#+author:~, ~#+date:~,
+  ~#+filetags:~, etc.) is read via ~orgize::Org::parse~ →
+  ~Document::keywords~.  See ~PageMeta::parse~ for the established
+  pattern.
+- Links (~[[target][label]]~), headlines (~* foo~), tags (~:tag:~),
+  property drawers, and Babel block headers (~#+begin_src LANG
+  :results ...~) must come from AST nodes — never from line scanning
+  or regex.
+- Tests that need to assert on parsed structure should construct an
+  ~Org~ and assert against AST nodes, not re-implement parsing.
+
+If orgize is missing an accessor you need, extend or upstream the AST
+helper rather than reaching past it into raw text.
+
 ** Code
 
 *** Initialisms

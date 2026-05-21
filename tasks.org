@@ -31,7 +31,7 @@ Considerations:
   resolve to a single ~orgize~ build (avoids duplicate-symbol issues
   if a future task makes ~org-wiki~ depend on ~org-fmt-lib~ directly).
 
-* TODO Replace manual org-mode parsing with orgize
+* DONE Replace manual org-mode parsing with orgize
 
 Today the only manual parsing is in ~crates/lib/src/page.rs~ —
 ~PageMeta::parse~ walks lines with ~starts_with('*')~ and string
