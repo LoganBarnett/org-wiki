@@ -1855,8 +1855,7 @@ dependencies = [
 [[package]]
 name = "orgize"
 version = "0.10.0-alpha.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b747231437c1d8e68355427250c167d3e4d94874727923511e4572b7f5fecd51"
+source = "git+ssh://git@github.com/LoganBarnett/orgize.git?branch=fix-multiline-bracket-link#164ec5f93c333a87a9530dbf02a821681c087ea5"
 dependencies = [
  "bytecount",
  "cfg-if",

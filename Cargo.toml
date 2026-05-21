@@ -63,8 +63,10 @@ org-wiki-lib = { path = "crates/lib" }
 git2 = "0.20"
 
 # Org-mode parsing — metadata extraction (titles, tags, etc.)
-# 0.10 is in alpha; no stable release yet.
-orgize = "0.10.0-alpha.10"
+# Tracks the LoganBarnett fork branch that carries the rowan-based AST
+# rewrite plus the multi-line bracket link fix.  Cargo.lock pins the
+# exact rev; bump by running `cargo update -p orgize`.
+orgize = { git = "ssh://git@github.com/LoganBarnett/orgize.git", branch = "fix-multiline-bracket-link" }
 
 # OIDC / OAuth2 authentication
 openidconnect = { version = "3", features = ["reqwest"] }

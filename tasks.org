@@ -1,0 +1,118 @@
+#+title:     org-wiki tasks
+#+author:    Logan Barnett
+#+email:     logustus@gmail.com
+#+language:  en
+#+todo:      TODO IN-PROGRESS BLOCKED | DONE CANCELLED
+
+* DONE Switch to latest orgize (fork branch)
+
+Track the ~fix-multiline-bracket-link~ branch on
+[[https://github.com/LoganBarnett/orgize]], which is forked from the latest
+orgize and includes the rowan-based AST rewrite.
+
+Update the workspace dependency in ~Cargo.toml~ from the published
+~0.10.0-alpha.10~ to a git source pointing at the fork branch:
+
+#+begin_src toml :exports code
+orgize = { git = "https://github.com/LoganBarnett/orgize.git", branch = "fix-multiline-bracket-link" }
+#+end_src
+
+Considerations:
+
+- This is a major API change (rowan AST).  Any code that touches
+  ~orgize~ types will need rewriting.  See the next task — currently no
+  source file imports ~orgize~, so the bump itself only requires
+  ~Cargo.lock~ to resolve.
+- After bumping, regenerate ~Cargo.lock~ inside the Nix dev shell
+  (~nix develop --command cargo update -p orgize~) and run
+  ~cargo test --workspace~.
+- Confirm the same git source / rev is used in
+  [[file:/Users/logan/dev/org-fmt][org-fmt]] so the two workspaces
+  resolve to a single ~orgize~ build (avoids duplicate-symbol issues
+  if a future task makes ~org-wiki~ depend on ~org-fmt-lib~ directly).
+
+* TODO Replace manual org-mode parsing with orgize
+
+Today the only manual parsing is in ~crates/lib/src/page.rs~ —
+~PageMeta::parse~ walks lines with ~starts_with('*')~ and string
+slicing to pick out ~#+title:~.  That comment on the struct explicitly
+calls out the workaround: we avoided 0.10-alpha until orgize
+stabilised.  The fork branch is that stabilisation.
+
+Rewrite ~PageMeta::parse~ to use orgize's rowan AST to read document
+keywords (~#+title:~, ~#+author:~, ~#+date:~, ~#+filetags:~, etc.).
+Strip the hand-rolled byte-slicing.
+
+Audit the rest of the codebase for other places we should be parsing
+org rather than treating it as text:
+
+- *Links* — once we have the AST, any code that needs to know about
+  ~[[link][display]]~ targets (broken-link detection, backlink
+  indexing, navigation) should ask orgize, not regex.  No such code
+  exists yet, but the previous design assumed we'd be writing it; do
+  it from orgize on day one.
+- *Headlines* — for a TOC / sidebar / outline view, use orgize's
+  headline nodes rather than scanning for ~^\*+~.
+- *Tags* (~:tag:~) — for filtering and search; AST-only.
+- *Babel blocks* — phase 2 work (execution permissions) needs to
+  identify ~#+begin_src LANG~ blocks accurately, including
+  ~:results~, ~:exports~, and language headers.  Don't regex this.
+
+Rule of thumb to encode in ~CLAUDE.md~ once this lands: /no string
+matching or regex against org-mode content; always go through orgize/.
+
+* TODO Bump org-fmt and call it as a library
+
+org-fmt already has a clean ~lib + cli~ split
+([[file:/Users/logan/dev/org-fmt/crates/lib/src/lib.rs]] re-exports
+~format_org~, ~format_org_with~, ~FormatOptions~).  The CLI in
+~crates/cli/src/main.rs~ is 86 lines and is genuinely thin — read
+input, call ~format_org_with~, write output.  Nothing else lives in
+the CLI that the lib lacks.
+
+Two coupled changes:
+
+1. *Bump the flake input.*  ~flake.nix~ pins
+   ~org-fmt.url = "github:LoganBarnett/org-fmt"~; run
+   ~nix flake lock --update-input org-fmt~ so the lock advances to
+   whatever head fixes the
+   double-spaces-after-punctuation-disappearing bug.  Verify the
+   fix in a smoke test (file with ~"Mr. Smith.  Hello."~ should
+   survive a round-trip).
+2. *Drop the subprocess; depend on the lib.*  Today
+   ~crates/lib/src/git.rs:196~ spawns the ~org-fmt~ binary on every
+   save.  Replace with a direct call:
+   #+begin_src rust :exports code
+   use org_fmt_lib::{format_org_with, FormatOptions};
+   let formatted = format_org_with(&content, &FormatOptions {
+     double_space_sentences: true,
+   });
+   #+end_src
+   That removes:
+   - The ~org_fmt_bin~ ~PathBuf~ in ~WikiRepo~, ~Config~, ~CliRaw~,
+     and the NixOS module.
+   - ~GitError::OrgFmtSpawn~ and the warn-on-non-zero-exit code path.
+   - The hard requirement that ~org-fmt~ be on ~PATH~ (still nice
+     to keep available in the dev shell for ad-hoc formatting).
+
+   And gives:
+   - Compile-time guarantees the formatter API hasn't drifted.
+   - No fork/exec per save.
+   - Errors are typed ~Result~ values, not exit codes.
+
+   Add ~org-fmt-lib~ as a workspace dependency in ~Cargo.toml~,
+   sourced from the same git repo as the flake input (pin to a rev,
+   not a branch, so Cargo and Nix agree on which build is in use).
+
+** Open question: do CLI users still want the binary?
+
+Yes — keep it.  It's useful for ad-hoc formatting and for editors
+that drive it as an external formatter.  Just don't make
+org-wiki one of its callers.
+
+** If the CLI ever grows beyond a thin wrapper
+
+If we discover the CLI is doing real work the lib can't, that's a
+defect in the lib.  Move the logic into ~org_fmt_lib~, re-export
+whatever API the CLI needs, and keep ~main.rs~ at "parse args, call
+lib, print result."
