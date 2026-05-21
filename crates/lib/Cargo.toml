@@ -14,6 +14,7 @@ thiserror = { workspace = true }
 tap = { workspace = true }  # For method chaining, reduces superfluous locals
 git2 = { workspace = true }
 orgize = { workspace = true }
+org-fmt-lib = { workspace = true }
 time = { workspace = true }
 
 [dev-dependencies]

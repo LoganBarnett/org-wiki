@@ -1801,11 +1801,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "org-fmt-lib"
+version = "0.1.0"
+source = "git+ssh://git@github.com/LoganBarnett/org-fmt.git?branch=main#cc98be0ca7fa4f16678d55e8268f8a4bda1a3536"
+dependencies = [
+ "serde",
+ "tap",
+ "thiserror 2.0.18",
+ "tracing",
+]
+
+[[package]]
 name = "org-wiki-lib"
 version = "0.1.0"
 dependencies = [
  "cargo-husky",
  "git2",
+ "org-fmt-lib",
  "orgize",
  "serde",
  "tap",

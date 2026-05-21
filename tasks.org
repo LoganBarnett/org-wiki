@@ -61,7 +61,7 @@ org rather than treating it as text:
 Rule of thumb to encode in ~CLAUDE.md~ once this lands: /no string
 matching or regex against org-mode content; always go through orgize/.
 
-* TODO Bump org-fmt and call it as a library
+* DONE Bump org-fmt and call it as a library
 
 org-fmt already has a clean ~lib + cli~ split
 ([[file:/Users/logan/dev/org-fmt/crates/lib/src/lib.rs]] re-exports

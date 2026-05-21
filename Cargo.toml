@@ -68,6 +68,12 @@ git2 = "0.20"
 # exact rev; bump by running `cargo update -p orgize`.
 orgize = { git = "ssh://git@github.com/LoganBarnett/orgize.git", branch = "fix-multiline-bracket-link" }
 
+# Org-mode formatter, consumed as a library.  The matching CLI is still
+# packaged via the flake input for ad-hoc use and treefmt, but the
+# server formats in-process to keep errors typed and avoid fork/exec
+# per save.  Cargo.lock pins the exact rev.
+org-fmt-lib = { git = "ssh://git@github.com/LoganBarnett/org-fmt.git", branch = "main" }
+
 # OIDC / OAuth2 authentication
 openidconnect = { version = "3", features = ["reqwest"] }
 

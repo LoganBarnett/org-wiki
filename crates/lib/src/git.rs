@@ -60,13 +60,6 @@ pub enum GitError {
 
   #[error("Internal error: git mutex poisoned")]
   MutexPoisoned,
-
-  #[error("Failed to spawn org-fmt at {path:?}: {source}")]
-  OrgFmtSpawn {
-    path: PathBuf,
-    #[source]
-    source: std::io::Error,
-  },
 }
 
 /// User whose edit is attributed via a `Co-authored-by:` commit trailer.
@@ -103,8 +96,9 @@ pub struct WikiRepo {
   /// Remote name to push to after commits (e.g. `"origin"`).
   /// `None` disables push entirely.
   remote: Option<String>,
-  /// Path to the org-fmt binary.  `None` disables post-save formatting.
-  org_fmt_bin: Option<PathBuf>,
+  /// When true, content passes through `org_fmt_lib::format_org_with`
+  /// before being written and committed.
+  format_on_save: bool,
   inner: Arc<Mutex<Repository>>,
 }
 
@@ -113,7 +107,7 @@ impl WikiRepo {
   pub fn open(
     root: &Path,
     remote: Option<String>,
-    org_fmt_bin: Option<PathBuf>,
+    format_on_save: bool,
   ) -> Result<Self, GitError> {
     let repo = Repository::open(root).map_err(|source| GitError::Open {
       path: root.to_owned(),
@@ -129,7 +123,7 @@ impl WikiRepo {
     Ok(Self {
       root: root.to_owned(),
       remote,
-      org_fmt_bin,
+      format_on_save,
       inner: Arc::new(Mutex::new(repo)),
     })
   }
@@ -177,7 +171,6 @@ impl WikiRepo {
   ) -> Result<git2::Oid, GitError> {
     let abs = self.root.join(rel_path);
 
-    // 1. Write file to the working tree.
     if let Some(parent) = abs.parent() {
       std::fs::create_dir_all(parent).map_err(|source| {
         GitError::CreateDir {
@@ -186,25 +179,19 @@ impl WikiRepo {
         }
       })?;
     }
-    std::fs::write(&abs, content).map_err(|source| GitError::WriteFile {
+
+    let formatted = if self.format_on_save {
+      org_fmt_lib::format_org_with(
+        content,
+        &org_fmt_lib::FormatOptions::default(),
+      )
+    } else {
+      content.to_owned()
+    };
+    std::fs::write(&abs, &formatted).map_err(|source| GitError::WriteFile {
       path: abs.clone(),
       source,
     })?;
-
-    // Run org-fmt if configured.  Spawn failure is a hard error; non-zero
-    // exit is a warning so a formatter bug never blocks a save.
-    if let Some(ref fmt) = self.org_fmt_bin {
-      let status = Command::new(fmt).arg(&abs).status().map_err(|source| {
-        GitError::OrgFmtSpawn {
-          path: fmt.clone(),
-          source,
-        }
-      })?;
-      if !status.success() {
-        tracing::warn!(?abs, code = ?status.code(),
-          "org-fmt exited non-zero; committing unformatted content");
-      }
-    }
 
     // 2. Stage the file and create a commit (mutex held for minimum duration).
     let repo = self.inner.lock().map_err(|_| GitError::MutexPoisoned)?;
@@ -401,7 +388,7 @@ mod tests {
       .output()
       .unwrap();
 
-    let repo = WikiRepo::open(path, None, None).unwrap();
+    let repo = WikiRepo::open(path, None, false).unwrap();
     (dir, repo)
   }
 

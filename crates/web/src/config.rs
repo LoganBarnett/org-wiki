@@ -77,9 +77,9 @@ pub struct CliRaw {
   #[arg(long, env = "PANDOC_BIN")]
   pub pandoc_bin: Option<PathBuf>,
 
-  /// Path to the org-fmt binary (omit to disable post-save formatting)
-  #[arg(long, env = "ORG_FMT_BIN")]
-  pub org_fmt_bin: Option<PathBuf>,
+  /// Format pages with org-fmt before committing.  Defaults to true.
+  #[arg(long, env = "FORMAT_ON_SAVE")]
+  pub format_on_save: Option<bool>,
 
   /// Directory for cached HTML fragments (omit to disable caching)
   #[arg(long, env = "CACHE_DIR")]
@@ -140,7 +140,7 @@ pub struct ConfigFileRaw {
   pub content_repo: Option<PathBuf>,
   pub content_remote: Option<String>,
   pub pandoc_bin: Option<PathBuf>,
-  pub org_fmt_bin: Option<PathBuf>,
+  pub format_on_save: Option<bool>,
   pub cache_dir: Option<PathBuf>,
   pub site_title: Option<String>,
   // git identity
@@ -187,7 +187,7 @@ pub struct Config {
   pub content_repo: PathBuf,
   pub content_remote: Option<String>,
   pub pandoc_bin: PathBuf,
-  pub org_fmt_bin: Option<PathBuf>,
+  pub format_on_save: bool,
   pub cache_dir: Option<PathBuf>,
   pub site_title: String,
   // git identity
@@ -274,12 +274,10 @@ impl Config {
       .or(config_file.pandoc_bin)
       .unwrap_or_else(|| PathBuf::from("pandoc"));
 
-    // An empty string explicitly disables formatting; omitting the key
-    // also leaves formatting off so deployments without org-fmt work.
-    let org_fmt_bin = cli
-      .org_fmt_bin
-      .or(config_file.org_fmt_bin)
-      .filter(|p| !p.as_os_str().is_empty());
+    let format_on_save = cli
+      .format_on_save
+      .or(config_file.format_on_save)
+      .unwrap_or(true);
 
     let cache_dir = cli.cache_dir.or(config_file.cache_dir);
 
@@ -367,7 +365,7 @@ impl Config {
       content_repo,
       content_remote,
       pandoc_bin,
-      org_fmt_bin,
+      format_on_save,
       cache_dir,
       site_title,
       commit_author_name,

@@ -111,13 +111,12 @@ in {
 
     # ── wiki content ──────────────────────────────────────────────────────
 
-    orgFmtPackage = lib.mkOption {
-      type = lib.types.nullOr lib.types.package;
-      default = null;
+    formatOnSave = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
       description = ''
-        Package providing the org-fmt binary.  When set, org-fmt is added
-        to the service PATH and post-save formatting is enabled.  Set to
-        null to disable formatting.
+        Run the in-process org-fmt formatter on each page before
+        committing.  Set to false to commit user input verbatim.
       '';
     };
 
@@ -239,10 +238,9 @@ in {
 
       # git, openssh, and pandoc must be on PATH.  git is used for commits
       # and pushes; openssh provides the ssh binary referenced by
-      # GIT_SSH_COMMAND; pandoc renders org-mode to HTML.
-      path =
-        [pkgs.git pkgs.openssh pkgs.pandoc]
-        ++ lib.optional (cfg.orgFmtPackage != null) cfg.orgFmtPackage;
+      # GIT_SSH_COMMAND; pandoc renders org-mode to HTML.  org-fmt is
+      # linked into the binary, so no extra package is required.
+      path = [pkgs.git pkgs.openssh pkgs.pandoc];
 
       environment =
         {
@@ -262,9 +260,10 @@ in {
           OIDC_CLIENT_ID = cfg.oidcClientId;
           OIDC_CLIENT_SECRET_FILE = "/run/credentials/org-wiki-web.service/oidc-client-secret";
           BASE_URL = cfg.baseUrl;
-        }
-        // lib.optionalAttrs (cfg.orgFmtPackage != null) {
-          ORG_FMT_BIN = "org-fmt";
+          FORMAT_ON_SAVE =
+            if cfg.formatOnSave
+            then "true"
+            else "false";
         }
         // lib.optionalAttrs (cfg.contentRemote != null) {
           CONTENT_REMOTE = cfg.contentRemote;

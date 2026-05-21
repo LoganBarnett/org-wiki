@@ -82,7 +82,7 @@ impl AppState {
     let wiki_repo = WikiRepo::open(
       &config.content_repo,
       config.content_remote.clone(),
-      config.org_fmt_bin.clone(),
+      config.format_on_save,
     )?;
     info!(path = ?config.content_repo, "opened wiki repository");
 
@@ -161,7 +161,7 @@ impl AppState {
     let repo_dir = tempfile::TempDir::new().unwrap().keep();
     git2::Repository::init(&repo_dir).unwrap();
     let wiki_repo =
-      org_wiki_lib::WikiRepo::open(&repo_dir, None, None).unwrap();
+      org_wiki_lib::WikiRepo::open(&repo_dir, None, false).unwrap();
 
     let oidc_client = openidconnect::core::CoreClient::new(
       ClientId::new("test".to_string()),
